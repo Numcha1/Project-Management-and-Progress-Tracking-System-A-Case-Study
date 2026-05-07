@@ -1,0 +1,27 @@
+flowchart TD
+    A[Guest] --> B[Login]
+    A --> C[Register]
+    A --> D[Forgot Password]
+    D --> E[Reset Password]
+
+    B --> F[index.php: Role Redirect]
+
+    F --> G[Student Dashboard]
+    F --> H[Teacher Dashboard]
+    F --> I[Admin Dashboard]
+
+    G --> J[Project Detail]
+    G --> K[All Tasks]
+    G --> L[Edit Profile]
+
+    H --> J
+    H --> L
+
+    I --> M[User Management]
+    I --> N[Announcements]
+    I --> O[Create Admin]
+
+    G --> P[Logout]
+    H --> P
+    I --> P
+

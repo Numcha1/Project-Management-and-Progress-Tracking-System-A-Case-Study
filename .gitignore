@@ -1,0 +1,10 @@
+# Backups (local only)
+backup_before_reorg_*/
+backup_before_frontend_backend_split_*/
+
+# Runtime/storage
+backend/storage/uploads/
+
+# OS/editor noise
+Thumbs.db
+.DS_Store
