@@ -1,0 +1,7 @@
+RewriteEngine On
+
+# Route root to frontend public index
+RewriteRule ^$ frontend/public/index.php [L,QSA]
+
+# Keep old root PHP URLs working after moving files into folders
+RewriteRule ^([A-Za-z0-9_-]+\.php)$ frontend/public/$1 [L,QSA]
