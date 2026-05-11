@@ -1,6 +1,19 @@
 <?php
 session_start();
 require_once __DIR__ . '/../System/db_connect.php';
+require_once __DIR__ . '/../System/app_helpers.php';
+
+$script_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+$app_base_path = $script_dir;
+if (preg_match('#^(.*)/frontend/public$#', $script_dir, $m) === 1) {
+    $app_base_path = $m[1];
+} elseif (preg_match('#^(.*)/backend/src/Legacy/Auth$#', $script_dir, $m) === 1) {
+    $app_base_path = $m[1];
+}
+$logo_src = rtrim($app_base_path, '/') . '/frontend/public/Image/IS.png';
+if ($logo_src === '/frontend/public/Image/IS.png') {
+    $logo_src = 'Image/IS.png';
+}
 
 $message = '';
 // ข้อความสำหรับการสมัครสมาชิกใหม่
@@ -25,10 +38,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['fullname'] = $user['fullname'];
         $_SESSION['role'] = $user['role'];
+        writeAuditLog($conn, (int)$user['id'], 'auth.login.success', 'เข้าสู่ระบบสำเร็จ', 'auth', (int)$user['id']);
 
         header("Location: index.php"); // ไปยังหน้า Dashboard
         exit;
     } else {
+        if ($user) {
+            writeAuditLog($conn, (int)$user['id'], 'auth.login.failed_password', 'เข้าสู่ระบบไม่สำเร็จ: รหัสผ่านไม่ถูกต้อง', 'auth', (int)$user['id']);
+        }
         $message = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
     }
 }
@@ -51,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <div class="bg-white p-8 rounded-xl shadow-xl w-96">
         
         <div class="text-center mb-6">
-            <img src="Image/IS.png" alt="IS Logo" class="h-24 w-auto mx-auto mb-4 object-contain drop-shadow-md">
+            <img src="<?= htmlspecialchars($logo_src) ?>" alt="IS Logo" class="h-24 w-auto mx-auto mb-4 object-contain drop-shadow-md">
             <h1 class="mt-2 text-xl font-bold text-gray-800">RMUTP Project Tracker</h1>
         </div>
 

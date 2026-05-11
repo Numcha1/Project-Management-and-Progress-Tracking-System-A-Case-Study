@@ -2,21 +2,42 @@
 session_start();
 require_once __DIR__ . '/../System/db_connect.php';
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
+    exit;
+}
+if (($_SESSION['role'] ?? '') !== 'student') {
+    header("Location: index.php");
     exit;
 }
 
 $user_fullname = $_SESSION['fullname'];
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 25;
 
 // ดึงงานทั้งหมด (ไม่จำกัดจำนวน) ที่ยังไม่เสร็จ
+$countStmt = $conn->prepare("
+    SELECT COUNT(*)
+    FROM tasks t
+    JOIN projects p ON t.project_id = p.id
+    WHERE t.assignee_name = ? AND t.status != 'done'
+");
+$countStmt->execute([$user_fullname]);
+$totalTasks = (int)$countStmt->fetchColumn();
+$totalPages = max(1, (int)ceil($totalTasks / $perPage));
+if ($page > $totalPages) {
+    $page = $totalPages;
+}
+$offset = ($page - 1) * $perPage;
+
 $stmt = $conn->prepare("
     SELECT t.*, p.name AS project_name 
     FROM tasks t 
     JOIN projects p ON t.project_id = p.id 
     WHERE t.assignee_name = ? AND t.status != 'done'
     ORDER BY t.due_date ASC
-");
+    LIMIT " . (int)$perPage . " OFFSET " . (int)$offset
+);
 $stmt->execute([$user_fullname]);
 $tasks = $stmt->fetchAll();
 ?>
@@ -35,7 +56,7 @@ $tasks = $stmt->fetchAll();
 <nav class="bg-purple-800 text-white p-4 shadow mb-6">
     <div class="container mx-auto flex items-center gap-4">
         <a href="student_dashboard.php" class="hover:text-gray-300"><i class="fas fa-arrow-left"></i> กลับ Dashboard</a>
-        <h1 class="font-bold text-xl">รายการงานค้างส่งทั้งหมด (<?= count($tasks) ?>)</h1>
+        <h1 class="font-bold text-xl">รายการงานค้างส่งทั้งหมด (<?= (int)$totalTasks ?>)</h1>
     </div>
 </nav>
 
@@ -83,6 +104,36 @@ $tasks = $stmt->fetchAll();
                     </tbody>
                 </table>
             </div>
+            <?php if ($totalTasks > 0): ?>
+                <?php
+                    $startRow = (($page - 1) * $perPage) + 1;
+                    $endRow = min($totalTasks, $page * $perPage);
+                ?>
+                <div class="mt-4 pt-4 border-t flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div class="text-sm text-gray-600">
+                        แสดง <?= (int)$startRow ?>-<?= (int)$endRow ?> จาก <?= (int)$totalTasks ?> รายการ
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <?php if ($page > 1): ?>
+                            <a href="all_tasks.php?page=1" class="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-sm">หน้าแรก</a>
+                            <a href="all_tasks.php?page=<?= (int)($page - 1) ?>" class="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-sm">ก่อนหน้า</a>
+                        <?php else: ?>
+                            <span class="px-3 py-1.5 rounded border bg-gray-100 text-gray-400 text-sm cursor-not-allowed">หน้าแรก</span>
+                            <span class="px-3 py-1.5 rounded border bg-gray-100 text-gray-400 text-sm cursor-not-allowed">ก่อนหน้า</span>
+                        <?php endif; ?>
+
+                        <span class="px-3 py-1.5 rounded bg-purple-700 text-white text-sm font-bold">หน้า <?= (int)$page ?> / <?= (int)$totalPages ?></span>
+
+                        <?php if ($page < $totalPages): ?>
+                            <a href="all_tasks.php?page=<?= (int)($page + 1) ?>" class="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-sm">ถัดไป</a>
+                            <a href="all_tasks.php?page=<?= (int)$totalPages ?>" class="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-sm">หน้าสุดท้าย</a>
+                        <?php else: ?>
+                            <span class="px-3 py-1.5 rounded border bg-gray-100 text-gray-400 text-sm cursor-not-allowed">ถัดไป</span>
+                            <span class="px-3 py-1.5 rounded border bg-gray-100 text-gray-400 text-sm cursor-not-allowed">หน้าสุดท้าย</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
         <?php else: ?>
             <div class="text-center py-10 text-gray-400">
                 <i class="fas fa-check-circle text-4xl mb-2 text-green-400"></i><br>

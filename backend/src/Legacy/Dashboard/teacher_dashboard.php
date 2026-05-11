@@ -3,13 +3,21 @@ session_start();
 require_once __DIR__ . '/../System/db_connect.php';
 
 // 1. เช็คสิทธิ์ (ต้องเป็น Teacher)
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'teacher') {
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
+    exit;
+}
+if (($_SESSION['role'] ?? '') !== 'teacher') {
+    header("Location: index.php");
     exit;
 }
 
 $user_id = $_SESSION['user_id'];
 $fullname = $_SESSION['fullname'];
+$script_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+$upload_web_base = preg_match('#/frontend/public$#', $script_dir)
+    ? $script_dir . '/uploads'
+    : $script_dir . '/frontend/public/uploads';
 
 // --- ดึงประกาศข่าวสารจาก Admin ---
 $announcement_msg = $conn->query("SELECT message FROM announcements LIMIT 1")->fetchColumn();
@@ -326,7 +334,7 @@ $completed_projects = $stmt_search->fetchAll();
                     
                     <div class="mt-auto border-t pt-3 space-y-2">
                         <?php if($t['file_path']): ?>
-                            <button type="button" onclick="openFile('uploads/<?= $t['file_path'] ?>')" class="w-full text-left bg-gray-100 border text-gray-700 px-3 py-1.5 rounded text-xs hover:bg-gray-200 transition">
+                            <button type="button" onclick='openFile(<?= json_encode($upload_web_base . "/" . rawurlencode($t["file_path"])) ?>)' class="w-full text-left bg-gray-100 border text-gray-700 px-3 py-1.5 rounded text-xs hover:bg-gray-200 transition">
                                 <i class="fas fa-paperclip text-blue-600"></i> ดูไฟล์แนบผลงาน
                             </button>
                         <?php endif; ?>
@@ -506,7 +514,7 @@ $completed_projects = $stmt_search->fetchAll();
                             <td class="p-3 text-xs text-gray-600"><?= htmlspecialchars($t['assignee_name']) ?></td>
                             <td class="p-3 text-center">
                                 <?php if($t['file_path']): ?>
-                                    <button type="button" onclick="openFile('uploads/<?= $t['file_path'] ?>')" class="bg-gray-100 border text-gray-700 px-3 py-1 rounded text-xs hover:bg-gray-200 transition">
+                                    <button type="button" onclick='openFile(<?= json_encode($upload_web_base . "/" . rawurlencode($t["file_path"])) ?>)' class="bg-gray-100 border text-gray-700 px-3 py-1 rounded text-xs hover:bg-gray-200 transition">
                                         <i class="fas fa-paperclip text-blue-600"></i> เปิดดูไฟล์
                                     </button>
                                 <?php else: ?>
@@ -581,7 +589,21 @@ $completed_projects = $stmt_search->fetchAll();
 </div>
 
 <script>
-    function openFile(path) { document.getElementById('file-viewer').src=path; document.getElementById('modal-file').classList.remove('hidden'); }
+    function openFile(path) {
+        if (!path) return;
+
+        const lower = String(path).toLowerCase();
+        const previewable = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt'];
+        const canPreviewInIframe = previewable.some((ext) => lower.endsWith(ext));
+
+        if (canPreviewInIframe) {
+            document.getElementById('file-viewer').src = path;
+            document.getElementById('modal-file').classList.remove('hidden');
+            return;
+        }
+
+        window.open(path, '_blank', 'noopener');
+    }
     
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status');

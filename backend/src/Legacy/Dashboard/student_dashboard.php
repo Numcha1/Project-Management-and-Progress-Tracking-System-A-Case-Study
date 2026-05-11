@@ -3,8 +3,12 @@ session_start();
 require_once __DIR__ . '/../System/db_connect.php';
 
 // 1. เช็คสิทธิ์นักศึกษา
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
+    exit;
+}
+if (($_SESSION['role'] ?? '') !== 'student') {
+    header("Location: index.php");
     exit;
 }
 

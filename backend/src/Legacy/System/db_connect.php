@@ -1,14 +1,28 @@
 <?php
 // db_connect.php
-$host = 'sql302.infinityfree.com';
-$dbname = 'if0_41797513_rmutp';
-$username = 'if0_41797513'; // หรือ username ของคุณ
-$password = 'buwH4JfV6QCZqf6';     // หรือ password ของคุณ
+$host = getenv('DB_HOST') ?: '127.0.0.1';
+$port = (int)(getenv('DB_PORT') ?: 3306);
+$dbname = getenv('DB_NAME') ?: 'rmutp';
+$username = getenv('DB_USER') ?: 'root'; // หรือ username ของคุณ
+$password = getenv('DB_PASS');
+if ($password === false) {
+    $password = ''; // หรือ password ของคุณ
+}
+$charset = getenv('DB_CHARSET') ?: 'utf8mb4';
 
 try {
-    $conn = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $password);
+    $dsn = sprintf(
+        'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+        $host,
+        $port,
+        $dbname,
+        $charset
+    );
+
+    $conn = new PDO($dsn, $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch(PDOException $e) {
-    die("Connection failed: " . $e->getMessage());
+    $conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    die('Connection failed: ' . $e->getMessage());
 }
 ?>

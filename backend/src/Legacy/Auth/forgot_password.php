@@ -2,6 +2,19 @@
 session_start();
 require_once __DIR__ . '/../System/db_connect.php';
 require_once __DIR__ . '/../System/config.php';
+require_once __DIR__ . '/../System/app_helpers.php';
+
+$script_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+$app_base_path = $script_dir;
+if (preg_match('#^(.*)/frontend/public$#', $script_dir, $m) === 1) {
+    $app_base_path = $m[1];
+} elseif (preg_match('#^(.*)/backend/src/Legacy/Auth$#', $script_dir, $m) === 1) {
+    $app_base_path = $m[1];
+}
+$logo_src = rtrim($app_base_path, '/') . '/frontend/public/Image/IS.png';
+if ($logo_src === '/frontend/public/Image/IS.png') {
+    $logo_src = 'Image/IS.png';
+}
 
 // โหลดไฟล์ PHPMailer (แบบ Manual)
 require __DIR__ . '/../../../libs/PHPMailer/Exception.php';
@@ -11,7 +24,13 @@ require __DIR__ . '/../../../libs/PHPMailer/SMTP.php';
 $status = '';
 $msg_text = '';
 
+if (($_GET['status'] ?? '') === 'csrf_invalid') {
+    $status = 'error';
+    $msg_text = 'Invalid request token. Please try again.';
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    ensureValidCsrfOrRedirect('forgot_password.php');
     $user_email = $_POST['email']; 
 
     $stmt = $conn->prepare("SELECT id, fullname FROM users WHERE email = ?");
@@ -28,20 +47,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mail = new \PHPMailer\PHPMailer\PHPMailer(true); 
 
         try {
+            if (trim(SMTP_USER) === '' || trim(SMTP_PASS) === '') {
+                throw new RuntimeException('SMTP credentials are not configured.');
+            }
+
             $mail->isSMTP();
             $mail->Host       = SMTP_HOST;
             $mail->SMTPAuth   = true;
             $mail->Username   = SMTP_USER;
             $mail->Password   = SMTP_PASS;
-            $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port       = 587;
+            $mail->SMTPSecure = strtolower(SMTP_ENCRYPTION) === 'ssl'
+                ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS
+                : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = SMTP_PORT;
             $mail->CharSet    = 'UTF-8';
 
             $mail->setFrom(SMTP_USER, SMTP_FROM_NAME);
             $mail->addAddress($user_email, $user['fullname']); 
 
-            // ⚠️ สำคัญ: เช็ค path "rmutp_project" ให้ตรงกับชื่อโฟลเดอร์ใน XAMPP ของคุณ
-            $link = "http://rmutpproject.rf.gd/reset_password.php?token=" . $token;
+            // ใช้ APP_BASE_URL ถ้าตั้งไว้; ถ้าไม่ตั้งจะสร้าง URL อัตโนมัติจากโดเมนปัจจุบัน
+            $baseUrl = APP_BASE_URL;
+            if ($baseUrl === '') {
+                $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+                $scheme = $isHttps ? 'https' : 'http';
+                $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+                $scriptDir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+                $baseUrl = $scheme . '://' . $host . ($scriptDir === '' ? '' : $scriptDir);
+            }
+            $link = $baseUrl . '/reset_password.php?token=' . rawurlencode($token);
             
             $mail->isHTML(true);
             $mail->Subject = 'แจ้งกู้คืนรหัสผ่าน (Reset Password) - RMUTP Project Tracker';
@@ -89,13 +122,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <div class="bg-white p-8 rounded-xl shadow-xl w-full max-w-sm border-t-4 border-purple-800">
         
         <div class="text-center mb-6">
-            <img src="Image/IS.png" alt="IS Logo" class="h-20 w-auto mx-auto mb-3 object-contain drop-shadow-md">
+            <img src="<?= htmlspecialchars($logo_src) ?>" alt="IS Logo" class="h-20 w-auto mx-auto mb-3 object-contain drop-shadow-md">
             <h2 class="text-xl font-bold text-gray-800">ลืมรหัสผ่าน?</h2>
             <p class="text-sm text-gray-500 mt-1">กรอกอีเมลของคุณเพื่อรับลิงก์ตั้งรหัสผ่านใหม่</p>
         </div>
 
         <?php if($status !== 'success'): ?>
         <form method="POST" class="space-y-4">
+            <?= csrfInputField() ?>
             <div>
                 <label class="block text-gray-700 text-sm font-bold mb-2">อีเมลที่ใช้สมัครสมาชิก</label>
                 <input type="email" name="email" required placeholder="example@rmutp.ac.th" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition">
