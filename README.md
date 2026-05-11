@@ -1,31 +1,31 @@
-https://github.com/Numcha1/Project-Management-and-Progress-Tracking-System-A-Case-Study# RMUTP Project Tracker
+﻿# ระบบติดตามความคืบหน้าโครงงาน RMUTP
 
-�к��Դ��������׺˹���ç�ҹ����Ѻ���ҷ `student`, `teacher`, `admin` �Ѳ�Ҵ��� PHP + MySQL/MariaDB ����͡Ẻ����ͧ�Ѻ��������鴨ҡ�ç���ҧ Legacy �����ç���ҧẺ�¡��� (Controller/Service/Repository/View)
+ระบบติดตามความคืบหน้าโครงงานสำหรับบทบาท `student`, `teacher`, `admin` พัฒนาด้วย PHP + MySQL/MariaDB และออกแบบให้รองรับการย้ายโค้ดจากโครงสร้าง Legacy ไปสู่โครงสร้างแบบแยกชั้น (Controller/Service/Repository/View)
 
-## ��������ö��ѡ
+## คุณสมบัติหลัก
 
-- ��Ѥ���Ҫԡ / �������к� / �͡�ҡ�к�
-- ������ʼ�ҹ��ҹ����� (PHPMailer + reset token)
-- ᴪ�����¡������ҷ: Student / Teacher / Admin
-- �Ѵ����ç�ҹ, �ҹ���� (tasks), ��еԴ��������׺˹��
-- �觧ҹṺ���, ��Ǩ�ҹ (approve/reject), ��кѹ�֡����ѵԡ���觡�Ѻ�ҹ
-- �Ѵ�����Ҫԡ��ç�ҹ����ԭ�Ҩ�������֡��
-- �к���С��, �������͹ (notifications), ��� deadline reminder
-- ˹����§ҹ������͡ CSV ����Ѻ�������к�
-- �к� Audit Logs ����Է������¢ͧ Admin
-- �� CSRF protection 㹿�����Ӥѭ����ѻ��Ŵ���Ẻ��ʹ���
+- สมัครสมาชิก / เข้าสู่ระบบ / ออกจากระบบ
+- ลืมรหัสผ่านผ่านอีเมล (PHPMailer + reset token)
+- แดชบอร์ดแยกตามบทบาท: Student / Teacher / Admin
+- จัดการโครงงาน, งานย่อย (tasks), และติดตามความคืบหน้า
+- ส่งงานแนบไฟล์, ตรวจงาน (approve/reject), และบันทึกประวัติการส่งกลับงาน
+- จัดการสมาชิกในโครงงานและเชิญอาจารย์ที่ปรึกษา
+- ระบบประกาศ, การแจ้งเตือน (notifications), และ deadline reminder
+- หน้ารายงานและส่งออก CSV สำหรับผู้ดูแลระบบ
+- ระบบ Audit Logs และสิทธิ์ย่อยของ Admin
+- มี CSRF protection ในฟอร์มสำคัญและอัปโหลดไฟล์แบบปลอดภัย
 
-## ʶҹ�ʶһѵ¡����Ѩ�غѹ
+## ภาพรวมสถาปัตยกรรมปัจจุบัน
 
-��ਡ������ҹ��ԧẺ Hybrid:
+โปรเจกต์นี้ใช้งานจริงแบบ Hybrid:
 
-- `frontend/public/*.php` �� public entry points
-- �� runtime �Ѩ�غѹ������ `backend/src/Legacy/**`
-- �� scaffold �ç���ҧ������ `backend/src/{Controllers,Services,Repositories,Views,...}` �����ͧ�Ѻ�����ῡ����
+- `frontend/public/*.php` เป็น public entry points
+- โค้ด runtime ปัจจุบันอยู่ที่ `backend/src/Legacy/**`
+- มี scaffold โครงสร้างใหม่ที่ `backend/src/{Controllers,Services,Repositories,Views,...}` เพื่อรองรับการรีแฟกเตอร์
 
-��ػ: �к��Ѩ�غѹ�ѧ�ѹ�� Legacy ����ѡ ��С��ѧ����������ç���ҧ����
+สรุป: ระบบปัจจุบันยังรันบน Legacy เป็นหลัก และกำลังทยอยย้ายไปโครงสร้างใหม่
 
-## �ç���ҧ��ਡ��
+## โครงสร้างโปรเจกต์
 
 ```txt
 rmutp_project/
@@ -39,61 +39,61 @@ rmutp_project/
 |- backend/
 |  |- libs/PHPMailer/            # mail library
 |  |- src/
-|  |  |- Legacy/                 # runtime logic �����ҹ��ԧ
-|  |  |- Config/Core/...         # scaffold �ç���ҧ����
+|  |  |- Legacy/                 # runtime logic ที่ใช้งานจริง
+|  |  |- Config/Core/...         # scaffold โครงสร้างใหม่
 |  |- storage/
 |
 |- docs/
-|  |- sql/rmutp_database.sql     # schema + incremental upgrade (�������)
+|  |- sql/rmutp_database.sql     # schema + incremental upgrade (ไฟล์เดียว)
 |
-|- buildDatabase.bat             # setup/upgrade �ҹ�����ż�ҹ CLI
-|- buildAdmin.bat                # ���ҧ/�ѻവ admin ��ҹ CLI
+|- buildDatabase.bat             # setup/upgrade ฐานข้อมูลผ่าน CLI
+|- buildAdmin.bat                # สร้าง/อัปเดต admin ผ่าน CLI
 |- .htaccess                     # route root -> frontend/public
 ```
 
-## ������ͧ����к�
+## ความต้องการของระบบ
 
 - Windows + XAMPP (Apache + MySQL/MariaDB)
-- PHP CLI (�й� PHP 8+ ����� `pdo_mysql`)
-- MySQL 8+ ���� MariaDB 10.4+
+- PHP CLI (แนะนำ PHP 8+ พร้อม `pdo_mysql`)
+- MySQL 8+ หรือ MariaDB 10.4+
 
-## ���������ҹ (Windows + XAMPP)
+## วิธีติดตั้งและเริ่มต้นใช้งาน (Windows + XAMPP)
 
-1. �Դ Apache ��� MySQL � XAMPP
-2. �ҧ��ਡ������ `htdocs`
-3. ��駤�� DB (��ҵ�ͧ���) ��ҹ environment variables �� `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`
-4. ���ҧ/�ѻ�ô�ҹ������
+1. เปิด Apache และ MySQL ใน XAMPP
+2. วางโปรเจกต์ไว้ใน `htdocs`
+3. ตั้งค่า DB (ถ้าต้องการ) ผ่าน environment variables เช่น `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`
+4. สร้าง/อัปเกรดฐานข้อมูล
 
 ```bat
 buildDatabase.bat
 ```
 
-5. ���ҧ�����������ʼ�ҹ admin
+5. สร้างหรือรีเซ็ตรหัสผ่าน admin
 
 ```bat
 buildAdmin.bat --email=admin@rmutp.ac.th --name="Super Admin" --password="StrongPassword123!"
 ```
 
-6. �����纼�ҹ URL �ͧ��������ਡ�� ��
+6. เข้าเว็บผ่าน URL ของโฟลเดอร์โปรเจกต์ เช่น
 
 ```txt
 http://localhost/<your-project-folder>/
 ```
 
-������ҵç:
+หรือเข้าตรง:
 
 ```txt
 http://localhost/<your-project-folder>/frontend/public/
 ```
 
-## ʤ�Ի�� CLI
+## สคริปต์คำสั่ง (CLI)
 
-### `buildDatabase.bat`
+### สร้างหรืออัปเกรดฐานข้อมูล: `buildDatabase.bat`
 
-���¡ `backend/src/Legacy/Admin/buildDatabase.php` �������ҧ�ҹ��������� apply SQL
+เรียก `backend/src/Legacy/Admin/buildDatabase.php` เพื่อสร้างฐานข้อมูลและ apply SQL
 
-- SQL �������: `docs/sql/rmutp_database.sql`
-- �ͧ�Ѻ options:
+- SQL เริ่มต้น: `docs/sql/rmutp_database.sql`
+- รองรับ options:
   - `--host`
   - `--port`
   - `--database`
@@ -101,31 +101,31 @@ http://localhost/<your-project-folder>/frontend/public/
   - `--password`
   - `--sql`
 
-������ҧ:
+ตัวอย่าง:
 
 ```bat
 buildDatabase.bat --database=rmutp --user=root --password=your_password
 buildDatabase.bat --sql=docs\sql\rmutp_database.sql
 ```
 
-### `buildAdmin.bat`
+### สร้างหรืออัปเดตผู้ดูแลระบบ: `buildAdmin.bat`
 
-���¡ `backend/src/Legacy/Admin/buildAdmin.php` �������ҧ�����ѻവ�ѭ���ʹ�Թ
+เรียก `backend/src/Legacy/Admin/buildAdmin.php` เพื่อสร้างหรืออัปเดตบัญชีแอดมิน
 
-- �ͧ�Ѻ options:
+- รองรับ options:
   - `--email`
   - `--name`
   - `--password`
 
-�����˵�:
-- �������� `--password` �к����������ʼ�ҹ����ѵ��ѵ�
-- ���ʼ�ҹ��ͧ������ҧ���� 10 ����ѡ��
+หมายเหตุ:
+- ถ้าไม่ส่ง `--password` ระบบจะสุ่มรหัสผ่านให้อัตโนมัติ
+- รหัสผ่านต้องยาวอย่างน้อย 10 ตัวอักษร
 
-## ������Ǵ���� (Environment Variables)
+## ตัวแปรแวดล้อม (Environment Variables)
 
-### Database
+### ฐานข้อมูล
 
-| Variable | Default |
+| Variable | ค่าเริ่มต้น |
 |---|---|
 | `DB_HOST` | `127.0.0.1` |
 | `DB_PORT` | `3306` |
@@ -134,9 +134,9 @@ buildDatabase.bat --sql=docs\sql\rmutp_database.sql
 | `DB_PASS` | `` (empty) |
 | `DB_CHARSET` | `utf8mb4` |
 
-### SMTP / Reset Password
+### อีเมล (SMTP) / รีเซ็ตรหัสผ่าน
 
-| Variable | Default |
+| Variable | ค่าเริ่มต้น |
 |---|---|
 | `SMTP_HOST` | `smtp.gmail.com` |
 | `SMTP_PORT` | `587` |
@@ -146,15 +146,15 @@ buildDatabase.bat --sql=docs\sql\rmutp_database.sql
 | `SMTP_FROM_NAME` | `RMUTP Support Team` |
 | `APP_BASE_URL` | `` (auto detect) |
 
-### Admin Bootstrap (optional)
+### ค่าตั้งต้นผู้ดูแลระบบ (ไม่บังคับ)
 
-| Variable | Description |
+| Variable | คำอธิบาย |
 |---|---|
-| `ADMIN_EMAIL` | default email for `buildAdmin` |
-| `ADMIN_FULLNAME` | default full name for `buildAdmin` |
-| `ADMIN_PASSWORD` | default password for `buildAdmin` |
+| `ADMIN_EMAIL` | default email สำหรับ `buildAdmin` |
+| `ADMIN_FULLNAME` | default full name สำหรับ `buildAdmin` |
+| `ADMIN_PASSWORD` | default password สำหรับ `buildAdmin` |
 
-## ˹���Ӥѭ�ͧ�к�
+## หน้าสำคัญของระบบ
 
 - Public: `login.php`, `register.php`, `forgot_password.php`, `reset_password.php`
 - Entry: `index.php` (role-based redirect)
@@ -162,16 +162,16 @@ buildDatabase.bat --sql=docs\sql\rmutp_database.sql
 - Teacher: `teacher_dashboard.php`, `project_detail.php`
 - Admin: `admin_dashboard.php`, `admin_reports.php`, `admin_audit_logs.php`, `admin_attachments.php`
 
-## �ҹ������
+## ข้อมูลฐานข้อมูล
 
-- ��� SQL ��ѡ: `docs/sql/rmutp_database.sql`
-- �������������:
+- ไฟล์ SQL หลัก: `docs/sql/rmutp_database.sql`
+- เป็นไฟล์รวมที่มี:
   - Full schema
   - Incremental upgrade
-  - ����������� `system_settings` ��� `announcements`
-- �͡Ẻ����ѹ�������дѺʤ�Ի��
+  - ค่าเริ่มต้นใน `system_settings` และ `announcements`
+- ออกแบบให้รันซ้ำได้ในระดับสคริปต์
 
-## �͡������ਡ��
+## เอกสารในโปรเจกต์
 
 - `docs/PROJECT_STRUCTURE.md`
 - `docs/FRONTEND_BACKEND_STRUCTURE.md`
@@ -179,15 +179,15 @@ buildDatabase.bat --sql=docs\sql\rmutp_database.sql
 - `docs/WEBSITE_STRUCTURE_DESIGN.md`
 - `docs/SITEMAP.mmd`
 
-## �����ѭ�����ͧ��
+## การแก้ปัญหาเบื้องต้น
 
-- �Դ˹��������� rewrite ���ӧҹ:
-  - ��Ǩ��� Apache �Դ `mod_rewrite` ����
-  - ��Ǩ��� `.htaccess` � root �١��ҹ
-- �ѹ `buildDatabase.bat` ����ҹ:
-  - ��Ǩ��� MySQL �ӧҹ
-  - ��Ǩ��� `DB_*` ���ç�Ѻ environment
-  - ��Ǩ�Է��� user �������ö `CREATE DATABASE` ��
-- ������ʼ�ҹ��������������:
-  - ��駤�� `SMTP_USER` ��� `SMTP_PASS`
-  - ��� `APP_BASE_URL` ���ç������ԧ���Ҿ�Ǵ���� production
+- เปิดหน้าเว็บแล้ว rewrite ไม่ทำงาน:
+  - ตรวจว่า Apache เปิด `mod_rewrite` แล้ว
+  - ตรวจว่า `.htaccess` ใน root ถูกอ่าน
+- รัน `buildDatabase.bat` ไม่ผ่าน:
+  - ตรวจว่า MySQL ทำงาน
+  - ตรวจค่า `DB_*` ให้ตรงกับ environment
+  - ตรวจสิทธิ์ user ว่าสามารถ `CREATE DATABASE` ได้
+- ลืมรหัสผ่านแล้วไม่ส่งอีเมล:
+  - ตั้งค่า `SMTP_USER` และ `SMTP_PASS`
+  - ตั้ง `APP_BASE_URL` ให้ตรงโดเมนจริงในสภาพแวดล้อม production
