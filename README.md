@@ -10,8 +10,10 @@
 - จัดการโครงงาน, งานย่อย (tasks), และติดตามความคืบหน้า
 - ส่งงานแนบไฟล์, ตรวจงาน (approve/reject), และบันทึกประวัติการส่งกลับงาน
 - จัดการสมาชิกในโครงงานและเชิญอาจารย์ที่ปรึกษา
+- ระบบประเมินโครงงานแบบ Rubric พร้อมเก็บประวัติผลประเมิน
 - ระบบประกาศ, การแจ้งเตือน (notifications), และ deadline reminder
 - หน้ารายงานและส่งออก CSV สำหรับผู้ดูแลระบบ
+- KPI Dashboard สำหรับติดตามภาพรวมโครงงานและงานเกินกำหนด
 - ระบบ Audit Logs และสิทธิ์ย่อยของ Admin
 - มี CSRF protection ในฟอร์มสำคัญและอัปโหลดไฟล์แบบปลอดภัย
 
@@ -85,6 +87,22 @@ http://localhost/<your-project-folder>/
 ```txt
 http://localhost/<your-project-folder>/frontend/public/
 ```
+
+## ข้อมูล Demo สำหรับทดสอบ Flow
+
+หลังรัน `buildDatabase.bat` ระบบจะมีข้อมูลตัวอย่างครบ Flow (seed จาก `docs/sql/rmutp_database.sql`) และใช้งานด้วยรหัสผ่านเดียวกันทุกบัญชี:
+
+- รหัสผ่านทุกบัญชี: `DemoPass123!`
+- Admin: `admin.demo@rmutp.ac.th`
+- Teacher: `teacher.one@rmutp.ac.th`, `teacher.two@rmutp.ac.th`
+- Student: `student.one@rmutp.ac.th`, `student.two@rmutp.ac.th`, `student.three@rmutp.ac.th`
+
+Flow ที่แนะนำสำหรับการเดโม:
+
+1. Login เป็น `student.one` แล้วเข้าโครงงาน `Smart Library Queue System`
+2. ดูงานที่มีสถานะ `pending/rejected` และปุ่ม Rubric ในหน้าโครงงาน
+3. Login เป็น `teacher.one` แล้วบันทึกผลที่หน้า `project_evaluation.php?id=<project_id>`
+4. Login เป็น `admin.demo` แล้วดู `admin_kpi.php` และ `admin_reports.php`
 
 ## สคริปต์คำสั่ง (CLI)
 
@@ -160,7 +178,8 @@ buildDatabase.bat --sql=docs\sql\rmutp_database.sql
 - Entry: `index.php` (role-based redirect)
 - Student: `student_dashboard.php`, `project_detail.php`, `all_tasks.php`, `edit_profile.php`
 - Teacher: `teacher_dashboard.php`, `project_detail.php`
-- Admin: `admin_dashboard.php`, `admin_reports.php`, `admin_audit_logs.php`, `admin_attachments.php`
+- Shared: `project_evaluation.php` (Rubric ประเมินโครงงาน)
+- Admin: `admin_dashboard.php`, `admin_kpi.php`, `admin_reports.php`, `admin_audit_logs.php`, `admin_attachments.php`
 
 ## ข้อมูลฐานข้อมูล
 
@@ -178,6 +197,7 @@ buildDatabase.bat --sql=docs\sql\rmutp_database.sql
 - `docs/FILE_MAPPING.md`
 - `docs/WEBSITE_STRUCTURE_DESIGN.md`
 - `docs/SITEMAP.mmd`
+- `docs/DEMO_FLOW.md`
 
 ## การแก้ปัญหาเบื้องต้น
 

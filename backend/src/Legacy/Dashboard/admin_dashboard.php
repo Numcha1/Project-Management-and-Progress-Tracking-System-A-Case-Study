@@ -352,6 +352,9 @@ while ($row = $settings_result->fetch()) {
                     <a href="admin_reports.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition text-sm font-bold">
                         <i class="fas fa-file-export mr-2"></i> รายงานและส่งออก CSV
                     </a>
+                    <a href="admin_kpi.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition text-sm font-bold">
+                        <i class="fas fa-chart-line mr-2"></i> KPI Dashboard
+                    </a>
                     <?php if (hasAdminPermission($admin_permissions, 'can_view_audit')): ?>
                     <a href="admin_audit_logs.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-800 transition text-sm font-bold">
                         <i class="fas fa-clipboard-list mr-2"></i> ประวัติการใช้งาน
@@ -1023,3 +1026,4 @@ while ($row = $settings_result->fetch()) {
     </script>
 </body>
 </html>
+

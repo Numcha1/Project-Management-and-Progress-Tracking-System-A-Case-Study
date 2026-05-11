@@ -586,3 +586,363 @@ ON DUPLICATE KEY UPDATE setting_key = setting_key;
 DELETE FROM system_settings
 WHERE setting_key IN ('allow_registration', 'items_per_page', 'system_name');
 
+-- =========================================================
+-- DEMO FLOW DATASET (idempotent)
+-- Purpose:
+--   Seed complete demo flow data for Student -> Teacher -> Admin -> Evaluation
+-- Notes:
+--   - Safe to run multiple times.
+--   - Demo password for all inserted users: DemoPass123!
+-- =========================================================
+
+-- 1) Demo users by role
+INSERT INTO users (fullname, student_code, email, password, role, created_at, updated_at)
+VALUES
+    ('System Admin Demo', NULL, 'admin.demo@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'admin', NOW(), NOW()),
+    ('Dr. Nattapong R.', NULL, 'teacher.one@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'teacher', NOW(), NOW()),
+    ('Asst. Prof. Siriporn K.', NULL, 'teacher.two@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'teacher', NOW(), NOW()),
+    ('Somchai Student', '653040001-1', 'student.one@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'student', NOW(), NOW()),
+    ('Suda Student', '653040002-1', 'student.two@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'student', NOW(), NOW()),
+    ('Krit Student', '653040003-1', 'student.three@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'student', NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+    fullname = VALUES(fullname),
+    student_code = VALUES(student_code),
+    password = VALUES(password),
+    role = VALUES(role),
+    updated_at = NOW();
+
+-- 2) Ensure admin permission row
+INSERT INTO admin_permissions (
+    admin_id,
+    can_manage_users,
+    can_manage_projects,
+    can_manage_announcements,
+    can_manage_settings,
+    can_manage_permissions,
+    can_backup_restore,
+    can_view_audit,
+    can_send_notifications,
+    updated_at
+)
+SELECT
+    u.id,
+    1, 1, 1, 1, 1, 1, 1, 1,
+    NOW()
+FROM users u
+LEFT JOIN admin_permissions ap ON ap.admin_id = u.id
+WHERE u.email = 'admin.demo@rmutp.ac.th'
+  AND ap.admin_id IS NULL;
+
+-- 3) Rubric criteria used by evaluation flow
+INSERT INTO rubric_criteria (criterion_key, title, description, max_score, is_active, created_at, updated_at)
+VALUES
+    ('problem_analysis', 'การวิเคราะห์ปัญหาและโจทย์', 'ความชัดเจนของปัญหา วัตถุประสงค์ และขอบเขตโครงงาน', 20.00, 1, NOW(), NOW()),
+    ('method_design', 'การออกแบบวิธีดำเนินงาน', 'ความเหมาะสมของแนวทาง เครื่องมือ และแผนการดำเนินงาน', 20.00, 1, NOW(), NOW()),
+    ('implementation_quality', 'คุณภาพการพัฒนาและผลงาน', 'ความถูกต้อง ความสมบูรณ์ และความเสถียรของระบบ', 25.00, 1, NOW(), NOW()),
+    ('documentation_presentation', 'เอกสารและการนำเสนอ', 'ความครบถ้วนของเอกสารและการสื่อสารผลงาน', 15.00, 1, NOW(), NOW()),
+    ('impact_and_improvement', 'ผลกระทบและแนวทางต่อยอด', 'การประยุกต์ใช้จริงและข้อเสนอแนะในการพัฒนาต่อ', 20.00, 1, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+    title = VALUES(title),
+    description = VALUES(description),
+    max_score = VALUES(max_score),
+    is_active = VALUES(is_active),
+    updated_at = NOW();
+
+-- 4) Demo projects for KPI/report/evaluation
+INSERT INTO projects (
+    name, description, case_study, student_id,
+    status, progress, advisor_id, co_advisor_id,
+    created_at, updated_at
+)
+SELECT
+    'Smart Library Queue System',
+    'Queue and borrowing optimization system for university library service points.',
+    'RMUTP Central Library',
+    s1.id,
+    'in_progress',
+    60,
+    t1.id,
+    t2.id,
+    '2026-01-15 09:00:00',
+    NOW()
+FROM users s1
+JOIN users t1 ON t1.email = 'teacher.one@rmutp.ac.th'
+JOIN users t2 ON t2.email = 'teacher.two@rmutp.ac.th'
+WHERE s1.email = 'student.one@rmutp.ac.th'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM projects p
+      WHERE p.name = 'Smart Library Queue System' AND p.student_id = s1.id
+  );
+
+INSERT INTO projects (
+    name, description, case_study, student_id,
+    status, progress, advisor_id, co_advisor_id,
+    created_at, updated_at
+)
+SELECT
+    'Student Health Monitoring Platform',
+    'Web platform for student wellness tracking and advisor follow-up workflow.',
+    'Faculty of Science and Technology',
+    s2.id,
+    'completed',
+    100,
+    t1.id,
+    t2.id,
+    '2026-02-10 10:00:00',
+    NOW()
+FROM users s2
+JOIN users t1 ON t1.email = 'teacher.one@rmutp.ac.th'
+JOIN users t2 ON t2.email = 'teacher.two@rmutp.ac.th'
+WHERE s2.email = 'student.two@rmutp.ac.th'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM projects p
+      WHERE p.name = 'Student Health Monitoring Platform' AND p.student_id = s2.id
+  );
+
+-- 5) Project members (accepted + pending)
+INSERT INTO project_members (project_id, user_id, status, created_at)
+SELECT p.id, u.id, 'accepted', NOW()
+FROM projects p
+JOIN users u ON u.email = 'student.two@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_members pm
+      WHERE pm.project_id = p.id AND pm.user_id = u.id
+  );
+
+INSERT INTO project_members (project_id, user_id, status, created_at)
+SELECT p.id, u.id, 'pending', NOW()
+FROM projects p
+JOIN users u ON u.email = 'student.three@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_members pm
+      WHERE pm.project_id = p.id AND pm.user_id = u.id
+  );
+
+-- 6) Tasks across states (todo/done + approved/pending/rejected)
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Requirement Analysis', 'Somchai Student', '2026-02-01', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Requirement Analysis'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'UI Prototype', 'Suda Student', '2026-03-01', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'UI Prototype'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Queue Engine Development', 'Somchai Student', '2026-04-10', 'done', 'pending', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Queue Engine Development'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Load Testing', 'Suda Student', '2026-04-25', 'todo', 'pending', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Load Testing'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Final Report', 'Somchai Student', '2026-05-01', 'todo', 'rejected', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Final Report'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Health Data Model', 'Suda Student', '2026-02-20', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Health Data Model'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Dashboard Integration', 'Suda Student', '2026-03-20', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Dashboard Integration'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Advisor Notification Flow', 'Krit Student', '2026-04-05', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Advisor Notification Flow'
+  );
+
+-- 7) Return history example (for rejected flow)
+INSERT INTO task_return_history (task_id, project_id, reviewer_id, note, attachment_path, created_at)
+SELECT
+    t.id,
+    p.id,
+    te.id,
+    'Please revise with measurable KPIs and clearer acceptance criteria.',
+    NULL,
+    NOW()
+FROM projects p
+JOIN tasks t ON t.project_id = p.id AND t.name = 'Final Report'
+JOIN users te ON te.email = 'teacher.one@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM task_return_history trh
+      WHERE trh.task_id = t.id AND trh.reviewer_id = te.id
+  );
+
+-- 8) Project evaluations (rubric summary)
+INSERT INTO project_evaluations (
+    project_id, evaluator_id, evaluation_round,
+    total_score, max_score, result, comment, evaluated_at
+)
+SELECT
+    p.id,
+    te.id,
+    1,
+    70.00,
+    100.00,
+    'revise',
+    'Core idea is strong. Please improve testing evidence and deployment readiness.',
+    NOW()
+FROM projects p
+JOIN users te ON te.email = 'teacher.one@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_evaluations pe
+      WHERE pe.project_id = p.id AND pe.evaluator_id = te.id AND pe.evaluation_round = 1
+  );
+
+INSERT INTO project_evaluations (
+    project_id, evaluator_id, evaluation_round,
+    total_score, max_score, result, comment, evaluated_at
+)
+SELECT
+    p.id,
+    te.id,
+    1,
+    91.00,
+    100.00,
+    'pass',
+    'Well-balanced implementation with strong advisor workflow and reporting quality.',
+    NOW()
+FROM projects p
+JOIN users te ON te.email = 'teacher.two@rmutp.ac.th'
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_evaluations pe
+      WHERE pe.project_id = p.id AND pe.evaluator_id = te.id AND pe.evaluation_round = 1
+  );
+
+-- 9) Evaluation scores by rubric criteria
+INSERT INTO evaluation_scores (evaluation_id, criterion_id, score, note, created_at)
+SELECT
+    pe.id,
+    rc.id,
+    CASE rc.criterion_key
+        WHEN 'problem_analysis' THEN 16.00
+        WHEN 'method_design' THEN 14.00
+        WHEN 'implementation_quality' THEN 18.00
+        WHEN 'documentation_presentation' THEN 10.00
+        WHEN 'impact_and_improvement' THEN 12.00
+        ELSE 0.00
+    END,
+    NULL,
+    NOW()
+FROM project_evaluations pe
+JOIN projects p ON p.id = pe.project_id
+JOIN rubric_criteria rc ON rc.is_active = 1
+WHERE p.name = 'Smart Library Queue System'
+  AND pe.evaluation_round = 1
+  AND NOT EXISTS (
+      SELECT 1
+      FROM evaluation_scores es
+      WHERE es.evaluation_id = pe.id AND es.criterion_id = rc.id
+  );
+
+INSERT INTO evaluation_scores (evaluation_id, criterion_id, score, note, created_at)
+SELECT
+    pe.id,
+    rc.id,
+    CASE rc.criterion_key
+        WHEN 'problem_analysis' THEN 18.00
+        WHEN 'method_design' THEN 18.00
+        WHEN 'implementation_quality' THEN 23.00
+        WHEN 'documentation_presentation' THEN 14.00
+        WHEN 'impact_and_improvement' THEN 18.00
+        ELSE 0.00
+    END,
+    NULL,
+    NOW()
+FROM project_evaluations pe
+JOIN projects p ON p.id = pe.project_id
+JOIN rubric_criteria rc ON rc.is_active = 1
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND pe.evaluation_round = 1
+  AND NOT EXISTS (
+      SELECT 1
+      FROM evaluation_scores es
+      WHERE es.evaluation_id = pe.id AND es.criterion_id = rc.id
+  );
+
+-- 10) Notifications and audit logs examples
+INSERT INTO notifications (user_id, title, message, type, related_project_id, is_read, created_at)
+SELECT
+    su.id,
+    'Project Evaluation Round 1',
+    'Your project has been evaluated. Please review the rubric summary.',
+    'info',
+    p.id,
+    0,
+    NOW()
+FROM users su
+JOIN projects p ON p.name = 'Smart Library Queue System'
+WHERE su.email = 'student.one@rmutp.ac.th'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM notifications n
+      WHERE n.user_id = su.id
+        AND n.title = 'Project Evaluation Round 1'
+        AND n.related_project_id = p.id
+  );
+
+INSERT INTO audit_logs (actor_id, action_key, action_detail, target_type, target_id, ip_address, created_at)
+SELECT
+    te.id,
+    'project.evaluation.create',
+    'Demo seed: created evaluation round 1',
+    'project',
+    p.id,
+    '127.0.0.1',
+    NOW()
+FROM users te
+JOIN projects p ON p.name = 'Smart Library Queue System'
+WHERE te.email = 'teacher.one@rmutp.ac.th'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM audit_logs al
+      WHERE al.actor_id = te.id
+        AND al.action_key = 'project.evaluation.create'
+        AND al.target_type = 'project'
+        AND al.target_id = p.id
+  );
+

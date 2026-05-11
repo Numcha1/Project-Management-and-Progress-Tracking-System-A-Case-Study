@@ -466,7 +466,12 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
         <a href="<?= $back_url ?>" class="text-gray-500 hover:text-purple-800 shrink-0"><i class="fas fa-arrow-left"></i> กลับ</a>
         <h1 class="font-bold text-xl text-purple-800 break-words leading-tight"><?= htmlspecialchars($project['name']) ?></h1>
     </div>
-    <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold shrink-0">ความคืบหน้า: <?= $project['progress'] ?>%</span>
+    <div class="flex items-center gap-2">
+        <a href="project_evaluation.php?id=<?= (int)$project_id ?>" class="bg-indigo-600 text-white px-3 py-1 rounded-full text-sm font-bold hover:bg-indigo-700 transition">
+            <i class="fas fa-clipboard-check mr-1"></i> Rubric
+        </a>
+        <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold shrink-0">ความคืบหน้า: <?= $project['progress'] ?>%</span>
+    </div>
 </nav>
 
 <div class="container mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -1222,8 +1227,4 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
 </script>
 </body>
 </html>
-
-
-
-
 
