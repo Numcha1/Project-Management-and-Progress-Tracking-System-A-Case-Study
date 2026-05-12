@@ -1,213 +1,208 @@
-﻿# ระบบติดตามความคืบหน้าโครงงาน RMUTP
+# RMUTP Academic Lifecycle Suite
 
-ระบบติดตามความคืบหน้าโครงงานสำหรับบทบาท `student`, `teacher`, `admin` พัฒนาด้วย PHP + MySQL/MariaDB และออกแบบให้รองรับการย้ายโค้ดจากโครงสร้าง Legacy ไปสู่โครงสร้างแบบแยกชั้น (Controller/Service/Repository/View)
+แพลตฟอร์มติดตามโครงงานระดับคณะ/มหาวิทยาลัย ครอบคลุมตั้งแต่ `เสนอหัวข้อ -> อนุมัติ -> milestone -> ประเมิน -> รายงาน`  
+พัฒนาด้วย `PHP + MySQL/MariaDB` โดยยังรันงานจริงบน Legacy และรีแฟกเตอร์แบบค่อยเป็นค่อยไป
 
-## คุณสมบัติหลัก
+## 1) ภาพรวมสั้นๆ
 
-- สมัครสมาชิก / เข้าสู่ระบบ / ออกจากระบบ
-- ลืมรหัสผ่านผ่านอีเมล (PHPMailer + reset token)
-- แดชบอร์ดแยกตามบทบาท: Student / Teacher / Admin
-- จัดการโครงงาน, งานย่อย (tasks), และติดตามความคืบหน้า
-- ส่งงานแนบไฟล์, ตรวจงาน (approve/reject), และบันทึกประวัติการส่งกลับงาน
-- จัดการสมาชิกในโครงงานและเชิญอาจารย์ที่ปรึกษา
-- ระบบประเมินโครงงานแบบ Rubric พร้อมเก็บประวัติผลประเมิน
-- ระบบประกาศ, การแจ้งเตือน (notifications), และ deadline reminder
-- หน้ารายงานและส่งออก CSV สำหรับผู้ดูแลระบบ
-- KPI Dashboard สำหรับติดตามภาพรวมโครงงานและงานเกินกำหนด
-- ระบบ Audit Logs และสิทธิ์ย่อยของ Admin
-- มี CSRF protection ในฟอร์มสำคัญและอัปโหลดไฟล์แบบปลอดภัย
+- รองรับ 3 บทบาทหลัก: `student`, `teacher`, `admin`
+- รองรับ `multi-tenant` แบบแยกฐานข้อมูลต่อคณะ (`core db` + `tenant db`)
+- มีโมดูล Academic Lifecycle:
+  - `Proposal Center`
+  - `Milestone Board`
+  - `Committee Assignment`
+- มีระบบกำกับดูแล: `approval workflow`, `audit log`, `backup governance`, `CSV import`
 
-## ภาพรวมสถาปัตยกรรมปัจจุบัน
+## 2) ความสามารถหลัก
 
-โปรเจกต์นี้ใช้งานจริงแบบ Hybrid:
+### ผู้ใช้ทั่วไป
+- สมัคร/ล็อกอิน/ออกจากระบบ
+- ลืมรหัสผ่านผ่านอีเมล (token reset)
+- แก้ไขข้อมูลส่วนตัว
 
-- `frontend/public/*.php` เป็น public entry points
-- โค้ด runtime ปัจจุบันอยู่ที่ `backend/src/Legacy/**`
-- มี scaffold โครงสร้างใหม่ที่ `backend/src/{Controllers,Services,Repositories,Views,...}` เพื่อรองรับการรีแฟกเตอร์
+### Student
+- สร้างและจัดการโครงงาน
+- จัดการสมาชิกในทีม
+- ส่งงานแนบไฟล์, ติดตามสถานะ, ดูงานค้าง
+- เข้าสู่กระบวนการ Proposal/Milestone ตามสิทธิ์
 
-สรุป: ระบบปัจจุบันยังรันบน Legacy เป็นหลัก และกำลังทยอยย้ายไปโครงสร้างใหม่
+### Teacher
+- รับ/ปฏิเสธคำเชิญเป็นอาจารย์ที่ปรึกษา
+- ตรวจงาน (`approve/reject`) และให้ข้อเสนอแนะ
+- ประเมินโครงงานตาม Rubric
 
-## โครงสร้างโปรเจกต์
+### Admin
+- จัดการผู้ใช้/ประกาศ/โครงงาน
+- KPI Dashboard + Reports + Export CSV
+- Audit Logs + Attachment Audit
+- Tenant Admin (สร้างคณะ, import users)
+- Backup Management
+
+## 3) สถาปัตยกรรมปัจจุบัน
+
+ระบบเป็น Hybrid:
+
+- Public entrypoints: `frontend/public/*.php`
+- Runtime หลัก: `backend/src/Legacy/**`
+- โครงสร้างรีแฟกเตอร์: `backend/src/Domain/**` และเลเยอร์ใหม่ที่ทยอยย้ายเข้า
+
+แนวทางพัฒนาใช้ `Strangler Pattern` เพื่อไม่หยุดระบบเดิมระหว่างย้ายโค้ด
+
+## 4) โครงสร้างโฟลเดอร์สำคัญ
 
 ```txt
 rmutp_project/
 |- frontend/
-|  |- public/                    # public document root
-|     |- *.php                   # wrappers -> backend/src/Legacy/*
-|     |- Image/
-|     |- assets/
-|     |- uploads/
+|  |- public/                      # entry points และ static assets
 |
 |- backend/
-|  |- libs/PHPMailer/            # mail library
+|  |- libs/PHPMailer/              # mail library
 |  |- src/
-|  |  |- Legacy/                 # runtime logic ที่ใช้งานจริง
-|  |  |- Config/Core/...         # scaffold โครงสร้างใหม่
+|  |  |- Legacy/                   # โค้ดที่รันจริงในปัจจุบัน
+|  |  |- Domain/                   # โครงสร้างโดเมนใหม่ (incremental refactor)
 |  |- storage/
+|     |- uploads/
+|     |- backups/
 |
 |- docs/
-|  |- sql/rmutp_database.sql     # schema + incremental upgrade (ไฟล์เดียว)
+|  |- sql/rmutp_database.sql       # tenant schema + seed + upgrade
+|  |- sql/rmutp_core_database.sql  # core schema (faculties/programs/import logs)
 |
-|- buildDatabase.bat             # setup/upgrade ฐานข้อมูลผ่าน CLI
-|- buildAdmin.bat                # สร้าง/อัปเดต admin ผ่าน CLI
-|- .htaccess                     # route root -> frontend/public
+|- buildDatabase.bat
+|- buildAdmin.bat
+|- buildUsers.bat
+|- checkSystem.bat
 ```
 
-## ความต้องการของระบบ
+## 5) ความต้องการระบบ
 
-- Windows + XAMPP (Apache + MySQL/MariaDB)
-- PHP CLI (แนะนำ PHP 8+ พร้อม `pdo_mysql`)
+- Windows + XAMPP (Apache, MySQL/MariaDB)
+- PHP 8+ (`pdo_mysql` ต้องพร้อมใช้งาน)
 - MySQL 8+ หรือ MariaDB 10.4+
 
-## วิธีติดตั้งและเริ่มต้นใช้งาน (Windows + XAMPP)
+## 6) วิธีเริ่มใช้งานเร็ว (Quick Start)
 
 1. เปิด Apache และ MySQL ใน XAMPP
 2. วางโปรเจกต์ไว้ใน `htdocs`
-3. ตั้งค่า DB (ถ้าต้องการ) ผ่าน environment variables เช่น `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`
-4. สร้าง/อัปเกรดฐานข้อมูล
+3. สร้างฐานข้อมูล
 
 ```bat
 buildDatabase.bat
 ```
 
-5. สร้างหรือรีเซ็ตรหัสผ่าน admin
+4. สร้าง/อัปเดตบัญชีแอดมิน
 
 ```bat
 buildAdmin.bat --email=admin@rmutp.ac.th --name="Super Admin" --password="StrongPassword123!"
 ```
 
-6. เข้าเว็บผ่าน URL ของโฟลเดอร์โปรเจกต์ เช่น
+5. เข้าใช้งานผ่าน
 
 ```txt
-http://localhost/<your-project-folder>/
+http://localhost/<project-folder>/
 ```
 
-หรือเข้าตรง:
+6. (แนะนำ) ตรวจสุขภาพระบบ
 
-```txt
-http://localhost/<your-project-folder>/frontend/public/
+```bat
+checkSystem.bat
 ```
 
-## ข้อมูล Demo สำหรับทดสอบ Flow
+## 7) Multi-tenant Commands
 
-หลังรัน `buildDatabase.bat` ระบบจะมีข้อมูลตัวอย่างครบ Flow (seed จาก `docs/sql/rmutp_database.sql`) และใช้งานด้วยรหัสผ่านเดียวกันทุกบัญชี:
+### สร้าง Core DB
 
-- รหัสผ่านทุกบัญชี: `DemoPass123!`
+```bat
+buildDatabase.bat --mode=core
+```
+
+### Provision คณะใหม่ (Tenant DB)
+
+```bat
+buildDatabase.bat --mode=tenant --faculty=fst --faculty-name="Faculty of Science and Technology" --tenant-db=rmutp_fst
+```
+
+### อัปเกรดทุก Tenant
+
+```bat
+buildDatabase.bat --mode=upgrade-all-tenants
+```
+
+### นำเข้าผู้ใช้จาก CSV รายคณะ
+
+```bat
+buildUsers.bat --faculty=fst --csv=users_fst.csv --upsert
+```
+
+## 8) Demo Accounts
+
+หลังรันฐานข้อมูลด้วยไฟล์ SQL หลัก จะมีบัญชีตัวอย่างพร้อมใช้งาน
+
+- รหัสผ่านเริ่มต้นทุกบัญชี: `DemoPass123!`
 - Admin: `admin.demo@rmutp.ac.th`
 - Teacher: `teacher.one@rmutp.ac.th`, `teacher.two@rmutp.ac.th`
 - Student: `student.one@rmutp.ac.th`, `student.two@rmutp.ac.th`, `student.three@rmutp.ac.th`
 
-Flow ที่แนะนำสำหรับการเดโม:
+## 9) Environment Variables ที่ใช้บ่อย
 
-1. Login เป็น `student.one` แล้วเข้าโครงงาน `Smart Library Queue System`
-2. ดูงานที่มีสถานะ `pending/rejected` และปุ่ม Rubric ในหน้าโครงงาน
-3. Login เป็น `teacher.one` แล้วบันทึกผลที่หน้า `project_evaluation.php?id=<project_id>`
-4. Login เป็น `admin.demo` แล้วดู `admin_kpi.php` และ `admin_reports.php`
+### Database
 
-## สคริปต์คำสั่ง (CLI)
+- `DB_HOST` (default: `127.0.0.1`)
+- `DB_PORT` (default: `3306`)
+- `DB_NAME` (default: `rmutp`)
+- `DB_USER` (default: `root`)
+- `DB_PASS` (default: empty)
+- `TENANT_MODE` (`single` หรือ `multi`)
+- `CORE_DB_NAME` (default: `rmutp_core`)
+- `DEFAULT_TENANT_CODE`
 
-### สร้างหรืออัปเกรดฐานข้อมูล: `buildDatabase.bat`
+### SMTP / Reset Password
 
-เรียก `backend/src/Legacy/Admin/buildDatabase.php` เพื่อสร้างฐานข้อมูลและ apply SQL
+- `SMTP_HOST` (default: `smtp.gmail.com`)
+- `SMTP_PORT` (default: `587`)
+- `SMTP_ENCRYPTION` (default: `tls`)
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM_NAME`
+- `APP_BASE_URL`
 
-- SQL เริ่มต้น: `docs/sql/rmutp_database.sql`
-- รองรับ options:
-  - `--host`
-  - `--port`
-  - `--database`
-  - `--user`
-  - `--password`
-  - `--sql`
+## 10) หน้าหลักของระบบ
 
-ตัวอย่าง:
+- Auth: `login.php`, `register.php`, `forgot_password.php`, `reset_password.php`
+- Student: `student_dashboard.php`, `project_detail.php`, `all_tasks.php`
+- Teacher: `teacher_dashboard.php`, `project_detail.php`
+- Workflow: `proposal_center.php`, `milestone_board.php`, `committee_assignment.php`, `approval_center.php`
+- Admin: `admin_dashboard.php`, `admin_kpi.php`, `admin_reports.php`, `admin_audit_logs.php`, `admin_attachments.php`, `admin_backups.php`, `tenant_admin.php`
+
+## 11) คำสั่งตรวจระบบ
 
 ```bat
-buildDatabase.bat --database=rmutp --user=root --password=your_password
-buildDatabase.bat --sql=docs\sql\rmutp_database.sql
+checkSystem.bat
 ```
 
-### สร้างหรืออัปเดตผู้ดูแลระบบ: `buildAdmin.bat`
+เช็กหลักๆ:
+- ไฟล์สำคัญและโฟลเดอร์สำคัญ
+- PHP runtime
+- PHP lint
+- SQL table definition
+- สแกนไฟล์ JavaScript/TypeScript (ถ้ามี) หา mojibake
+- ตรวจว่ามีไฟล์ Java หรือไม่
 
-เรียก `backend/src/Legacy/Admin/buildAdmin.php` เพื่อสร้างหรืออัปเดตบัญชีแอดมิน
+## 12) ปัญหาที่พบบ่อย
 
-- รองรับ options:
-  - `--email`
-  - `--name`
-  - `--password`
+- เปิดเว็บแล้ว route ไม่ทำงาน: ตรวจ `mod_rewrite` และ `.htaccess`
+- สร้าง DB ไม่ผ่าน: ตรวจ `DB_*` และสิทธิ์ user DB
+- โหมด multi-tenant ล็อกอินไม่เจอผู้ใช้: ตรวจ `tenant code`, `faculties.tenant_db_name`, `TENANT_MODE=multi`
+- ลืมรหัสผ่านแล้วไม่ส่งเมล: ตรวจ `SMTP_USER`/`SMTP_PASS`
 
-หมายเหตุ:
-- ถ้าไม่ส่ง `--password` ระบบจะสุ่มรหัสผ่านให้อัตโนมัติ
-- รหัสผ่านต้องยาวอย่างน้อย 10 ตัวอักษร
+## 13) เอกสารเพิ่มเติม
 
-## ตัวแปรแวดล้อม (Environment Variables)
-
-### ฐานข้อมูล
-
-| Variable | ค่าเริ่มต้น |
-|---|---|
-| `DB_HOST` | `127.0.0.1` |
-| `DB_PORT` | `3306` |
-| `DB_NAME` | `rmutp` |
-| `DB_USER` | `root` |
-| `DB_PASS` | `` (empty) |
-| `DB_CHARSET` | `utf8mb4` |
-
-### อีเมล (SMTP) / รีเซ็ตรหัสผ่าน
-
-| Variable | ค่าเริ่มต้น |
-|---|---|
-| `SMTP_HOST` | `smtp.gmail.com` |
-| `SMTP_PORT` | `587` |
-| `SMTP_ENCRYPTION` | `tls` |
-| `SMTP_USER` | `` |
-| `SMTP_PASS` | `` |
-| `SMTP_FROM_NAME` | `RMUTP Support Team` |
-| `APP_BASE_URL` | `` (auto detect) |
-
-### ค่าตั้งต้นผู้ดูแลระบบ (ไม่บังคับ)
-
-| Variable | คำอธิบาย |
-|---|---|
-| `ADMIN_EMAIL` | default email สำหรับ `buildAdmin` |
-| `ADMIN_FULLNAME` | default full name สำหรับ `buildAdmin` |
-| `ADMIN_PASSWORD` | default password สำหรับ `buildAdmin` |
-
-## หน้าสำคัญของระบบ
-
-- Public: `login.php`, `register.php`, `forgot_password.php`, `reset_password.php`
-- Entry: `index.php` (role-based redirect)
-- Student: `student_dashboard.php`, `project_detail.php`, `all_tasks.php`, `edit_profile.php`
-- Teacher: `teacher_dashboard.php`, `project_detail.php`
-- Shared: `project_evaluation.php` (Rubric ประเมินโครงงาน)
-- Admin: `admin_dashboard.php`, `admin_kpi.php`, `admin_reports.php`, `admin_audit_logs.php`, `admin_attachments.php`
-
-## ข้อมูลฐานข้อมูล
-
-- ไฟล์ SQL หลัก: `docs/sql/rmutp_database.sql`
-- เป็นไฟล์รวมที่มี:
-  - Full schema
-  - Incremental upgrade
-  - ค่าเริ่มต้นใน `system_settings` และ `announcements`
-- ออกแบบให้รันซ้ำได้ในระดับสคริปต์
-
-## เอกสารในโปรเจกต์
-
-- `docs/PROJECT_STRUCTURE.md`
-- `docs/FRONTEND_BACKEND_STRUCTURE.md`
 - `docs/FILE_MAPPING.md`
-- `docs/WEBSITE_STRUCTURE_DESIGN.md`
 - `docs/SITEMAP.mmd`
-- `docs/DEMO_FLOW.md`
+- `docs/WEBSITE_STRUCTURE_DESIGN.md`
+- `docs/sql/rmutp_database.sql`
+- `docs/sql/rmutp_core_database.sql`
 
-## การแก้ปัญหาเบื้องต้น
+---
 
-- เปิดหน้าเว็บแล้ว rewrite ไม่ทำงาน:
-  - ตรวจว่า Apache เปิด `mod_rewrite` แล้ว
-  - ตรวจว่า `.htaccess` ใน root ถูกอ่าน
-- รัน `buildDatabase.bat` ไม่ผ่าน:
-  - ตรวจว่า MySQL ทำงาน
-  - ตรวจค่า `DB_*` ให้ตรงกับ environment
-  - ตรวจสิทธิ์ user ว่าสามารถ `CREATE DATABASE` ได้
-- ลืมรหัสผ่านแล้วไม่ส่งอีเมล:
-  - ตั้งค่า `SMTP_USER` และ `SMTP_PASS`
-  - ตั้ง `APP_BASE_URL` ให้ตรงโดเมนจริงในสภาพแวดล้อม production
+หากต้องการใช้งานระดับองค์กร แนะนำเริ่มจาก `pilot 2 คณะ` ก่อน แล้วค่อย rollout ทั้งมหาวิทยาลัยโดยใช้ runbook เดียวกัน
