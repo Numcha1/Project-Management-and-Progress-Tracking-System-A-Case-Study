@@ -1,6 +1,6 @@
 # RMUTP Academic Lifecycle Suite
 
-แพลตฟอร์มติดตามโครงงานระดับคณะ/มหาวิทยาลัย ครอบคลุมตั้งแต่ `เสนอหัวข้อ -> อนุมัติ -> milestone -> ประเมิน -> รายงาน`  
+แพลตฟอร์มติดตามโครงงานระดับคณะใน **ขนาดกลาง (Medium Scope)** ครอบคลุมตั้งแต่ `เสนอหัวข้อ -> อนุมัติ -> milestone -> ประเมิน -> รายงาน`  
 พัฒนาด้วย `PHP + MySQL/MariaDB` โดยยังรันงานจริงบน Legacy และรีแฟกเตอร์แบบค่อยเป็นค่อยไป
 
 ## 1) ภาพรวมสั้นๆ
@@ -12,6 +12,21 @@
   - `Milestone Board`
   - `Committee Assignment`
 - มีระบบกำกับดูแล: `approval workflow`, `audit log`, `backup governance`, `CSV import`
+
+## 1.1) ขอบเขตเวอร์ชันปัจจุบัน (Medium Scope)
+
+### อยู่ในขอบเขต (In Scope)
+- ระบบใช้งานจริงสำหรับทีม/รายวิชา/คณะขนาดกลาง
+- ฟีเจอร์ Student / Teacher / Admin ครบ flow หลัก
+- Workflow โครงงาน: Proposal + Milestone + Committee แบบใช้งานได้จริง
+- รายงานหลัก, audit log ระดับปฏิบัติการ, สำรองข้อมูลระดับระบบ
+- JavaScript กลาง + realtime counters ที่หน้า dashboard สำคัญ
+
+### นอกขอบเขตตอนนี้ (Out of Scope)
+- SSO และการเชื่อมต่อ IAM ระดับมหาวิทยาลัย
+- Policy engine หลายชั้นที่ซับซ้อนมาก (cross-faculty governance)
+- Compliance เชิงผู้ตรวจสอบแบบเต็มรูปแบบ (advanced retention/legal workflow)
+- ระบบ event bus / microservices / distributed orchestration
 
 ## 2) ความสามารถหลัก
 
@@ -205,4 +220,4 @@ checkSystem.bat
 
 ---
 
-หากต้องการใช้งานระดับองค์กร แนะนำเริ่มจาก `pilot 2 คณะ` ก่อน แล้วค่อย rollout ทั้งมหาวิทยาลัยโดยใช้ runbook เดียวกัน
+เวอร์ชันนี้ตั้งใจคงขนาดระบบที่ **กลางและดูแลง่าย** สำหรับทีมพัฒนา 4 คน โดยขยายต่อแบบ incremental ได้ในอนาคต
