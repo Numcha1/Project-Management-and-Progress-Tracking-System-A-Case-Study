@@ -52,6 +52,7 @@
 - Audit Logs + Attachment Audit
 - Tenant Admin (สร้างคณะ, import users)
 - Backup Management
+- Ops Center (Job Queue / Worker / Retry-Cancel / Retention settings)
 
 ## 3) สถาปัตยกรรมปัจจุบัน
 
@@ -149,6 +150,18 @@ buildDatabase.bat --mode=upgrade-all-tenants
 buildUsers.bat --faculty=fst --csv=users_fst.csv --upsert
 ```
 
+### รัน Worker Queue (CLI)
+
+```bat
+runWorker.bat --schedule-recurring --limit=50
+```
+
+### รัน Worker แบบ Loop
+
+```bat
+runWorker.bat --loop --interval-seconds=15 --schedule-recurring
+```
+
 ## 8) Demo Accounts
 
 หลังรันฐานข้อมูลด้วยไฟล์ SQL หลัก จะมีบัญชีตัวอย่างพร้อมใช้งาน
@@ -188,6 +201,7 @@ buildUsers.bat --faculty=fst --csv=users_fst.csv --upsert
 - Teacher: `teacher_dashboard.php`, `project_detail.php`
 - Workflow: `proposal_center.php`, `milestone_board.php`, `committee_assignment.php`, `approval_center.php`
 - Admin: `admin_dashboard.php`, `admin_kpi.php`, `admin_reports.php`, `admin_audit_logs.php`, `admin_attachments.php`, `admin_backups.php`, `tenant_admin.php`
+- Operations: `admin_ops.php`
 
 ## 11) คำสั่งตรวจระบบ
 

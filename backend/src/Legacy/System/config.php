@@ -21,3 +21,12 @@ if (!defined('SMTP_FROM_NAME')) {
 if (!defined('APP_BASE_URL')) {
     define('APP_BASE_URL', rtrim((string)(getenv('APP_BASE_URL') ?: ''), '/'));
 }
+if (!defined('TENANT_MODE')) {
+    define('TENANT_MODE', strtolower((string)(getenv('TENANT_MODE') ?: 'single')));
+}
+if (!defined('CORE_DB_NAME')) {
+    define('CORE_DB_NAME', (string)(getenv('CORE_DB_NAME') ?: 'rmutp_core'));
+}
+if (!defined('DEFAULT_TENANT_CODE')) {
+    define('DEFAULT_TENANT_CODE', strtolower((string)(getenv('DEFAULT_TENANT_CODE') ?: '')));
+}

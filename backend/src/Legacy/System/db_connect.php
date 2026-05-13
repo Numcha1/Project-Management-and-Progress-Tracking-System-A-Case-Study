@@ -1,28 +1,32 @@
-<?php
-// db_connect.php
-$host = getenv('DB_HOST') ?: '127.0.0.1';
-$port = (int)(getenv('DB_PORT') ?: 3306);
-$dbname = getenv('DB_NAME') ?: 'rmutp';
-$username = getenv('DB_USER') ?: 'root'; // หรือ username ของคุณ
-$password = getenv('DB_PASS');
-if ($password === false) {
-    $password = ''; // หรือ password ของคุณ
-}
-$charset = getenv('DB_CHARSET') ?: 'utf8mb4';
+﻿<?php
+
+require_once __DIR__ . '/tenant_helpers.php';
+
+$cfg = tenantBaseConfig();
+$tenantContext = tenantResolveRuntimeContext();
+$dbname = (string)($tenantContext['database'] ?? $cfg['default_db']);
 
 try {
     $dsn = sprintf(
         'mysql:host=%s;port=%d;dbname=%s;charset=%s',
-        $host,
-        $port,
+        $cfg['host'],
+        (int)$cfg['port'],
         $dbname,
-        $charset
+        $cfg['charset']
     );
 
-    $conn = new PDO($dsn, $username, $password);
+    $conn = new PDO($dsn, $cfg['username'], $cfg['password']);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+    $GLOBALS['tenant_context'] = [
+        'tenant_mode' => $tenantContext['tenant_mode'] ?? $cfg['tenant_mode'],
+        'tenant_code' => $tenantContext['tenant_code'] ?? '',
+        'tenant_name' => $tenantContext['tenant_name'] ?? 'Default',
+        'database' => $dbname,
+        'source' => $tenantContext['source'] ?? 'default',
+    ];
 } catch (PDOException $e) {
     die('Connection failed: ' . $e->getMessage());
 }
-?>
+

@@ -53,7 +53,11 @@ if (!$can_view && $user_role === 'teacher' && (int)$project['progress'] === 100)
     $can_view = true;
 }
 $can_edit = ($is_leader); 
-$has_primary_advisor = (!empty($project['advisor_id']) || !empty($project['pending_advisor_id']));
+$has_confirmed_advisor = (!empty($project['advisor_id']) || !empty($project['co_advisor_id']));
+$task_add_cooldown_seconds = 5;
+$task_add_cooldown_key = 'task_add_last_' . $project_id . '_' . $user_id;
+$task_items_per_page = 10;
+$task_page = max(1, (int)($_GET['task_page'] ?? 1));
 $script_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
 $upload_web_base = preg_match('#/frontend/public$#', $script_dir)
     ? $script_dir . '/uploads'
@@ -131,8 +135,16 @@ if ($can_edit && isset($_POST['update_project_details'])) {
 
 // --- ACTION: Add Task ---
 if ($can_edit && isset($_POST['add_task'])) {
-    if (!$has_primary_advisor) {
+    if (!$has_confirmed_advisor) {
         header("Location: project_detail.php?id=$project_id&status=advisor_required_for_task");
+        exit;
+    }
+
+    $now_ts = time();
+    $last_add_ts = (int)($_SESSION[$task_add_cooldown_key] ?? 0);
+    if ($last_add_ts > 0 && ($now_ts - $last_add_ts) < $task_add_cooldown_seconds) {
+        $wait_seconds = $task_add_cooldown_seconds - ($now_ts - $last_add_ts);
+        header("Location: project_detail.php?id=$project_id&status=task_add_cooldown&wait=" . (int)$wait_seconds);
         exit;
     }
 
@@ -144,7 +156,16 @@ if ($can_edit && isset($_POST['add_task'])) {
         exit;
     }
 
-    $conn->prepare("INSERT INTO tasks (project_id, name, assignee_name, due_date, status) VALUES (?, ?, ?, ?, 'todo')")->execute([$project_id, $_POST['task_name'], $_POST['assignee'], $_POST['due_date']]);
+    $task_name = trim((string)($_POST['task_name'] ?? ''));
+    $assignee_name = trim((string)($_POST['assignee'] ?? ''));
+    $due_date = trim((string)($_POST['due_date'] ?? ''));
+    if ($task_name === '' || $assignee_name === '' || $due_date === '') {
+        header("Location: project_detail.php?id=$project_id&status=task_data_invalid");
+        exit;
+    }
+
+    $conn->prepare("INSERT INTO tasks (project_id, name, assignee_name, due_date, status) VALUES (?, ?, ?, ?, 'todo')")->execute([$project_id, $task_name, $assignee_name, $due_date]);
+    $_SESSION[$task_add_cooldown_key] = $now_ts;
     header("Location: project_detail.php?id=$project_id&status=task_added");
     exit;
 }
@@ -397,11 +418,36 @@ if ($is_leader && isset($_POST['invite_advisor'])) {
 }
 
 // --- DATA FETCHING ---
-$tasks = $conn->prepare("SELECT * FROM tasks WHERE project_id=? ORDER BY due_date ASC");
+$task_total_stmt = $conn->prepare("SELECT COUNT(*) FROM tasks WHERE project_id = ?");
+$task_total_stmt->execute([$project_id]);
+$task_total_count = (int)$task_total_stmt->fetchColumn();
+$can_add_more_tasks = ($task_total_count < MAX_TASKS_PER_PROJECT);
+$task_total_pages = max(1, (int)ceil($task_total_count / $task_items_per_page));
+if ($task_page > $task_total_pages) {
+    $task_page = $task_total_pages;
+}
+$task_offset = ($task_page - 1) * $task_items_per_page;
+
+$tasks = $conn->prepare(
+    "SELECT * FROM tasks WHERE project_id = ? ORDER BY due_date ASC LIMIT " . (int)$task_items_per_page . " OFFSET " . (int)$task_offset
+);
 $tasks->execute([$project_id]);
 $tasks_list = $tasks->fetchAll();
-$task_total_count = count($tasks_list);
-$can_add_more_tasks = ($task_total_count < MAX_TASKS_PER_PROJECT);
+
+$task_page_query = $_GET;
+unset($task_page_query['task_page'], $task_page_query['status'], $task_page_query['wait']);
+$buildTaskPageUrl = static function (int $page) use ($project_id, $task_page_query): string {
+    $page = max(1, $page);
+    $query = array_merge($task_page_query, [
+        'id' => (int)$project_id,
+        'task_page' => $page,
+    ]);
+    return 'project_detail.php?' . http_build_query($query);
+};
+$task_visible_count = count($tasks_list);
+$task_start_item = $task_total_count > 0 ? ($task_offset + 1) : 0;
+$task_end_item = $task_total_count > 0 ? min($task_total_count, $task_offset + $task_visible_count) : 0;
+
 $task_return_history_map = [];
 if ($task_total_count > 0) {
     $task_ids = array_map('intval', array_column($tasks_list, 'id'));
@@ -453,10 +499,12 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
 <html lang="th">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($project['name']) ?></title>
         <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="assets/js/rmutp-ui.js"></script>
     <style>@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap'); body{font-family:'Sarabun',sans-serif;}</style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -504,7 +552,7 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
                             <div><?= htmlspecialchars($m['fullname']) ?> <?php if($m['status']=='pending') echo '<span class="text-[10px] text-yellow-600">(รอตอบรับ)</span>'; ?></div>
                         </div>
                         <?php if($is_leader): ?>
-                            <button type="button" onclick="confirmRemoveMember(event, <?= (int)$m['id'] ?>)" class="text-red-400 hover:text-red-600 px-2" title="ź��Ҫԡ"><i class="fas fa-times"></i></button>
+                            <button type="button" onclick="confirmRemoveMember(event, <?= (int)$m['id'] ?>)" class="text-red-400 hover:text-red-600 px-2" title="ลบสมาชิก"><i class="fas fa-times"></i></button>
                         <?php endif; ?>
                     </li>
                 <?php endforeach; ?>
@@ -533,7 +581,7 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
                     <div class="text-yellow-600 text-xs flex items-center gap-1">
                         <i class="fas fa-clock"></i> รอ: <?= $project['pending_advisor_name'] ?>
                         <?php if($is_leader): ?>
-                            <button type="button" onclick="confirmCancelAdvisorInvite(event, 'main')" class="text-red-400 hover:text-red-600 ml-1" title="¡��ԡ���ԭ"><i class="fas fa-times-circle"></i></button>
+                            <button type="button" onclick="confirmCancelAdvisorInvite(event, 'main')" class="text-red-400 hover:text-red-600 ml-1" title="ยกเลิกคำเชิญ"><i class="fas fa-times-circle"></i></button>
                         <?php endif; ?>
                     </div>
                 <?php else: ?>
@@ -564,7 +612,7 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
                     <div class="text-yellow-600 text-xs flex items-center gap-1">
                         <i class="fas fa-clock"></i> รอ: <?= $project['pending_co_advisor_name'] ?>
                         <?php if($is_leader): ?>
-                            <button type="button" onclick="confirmCancelAdvisorInvite(event, 'co')" class="text-red-400 hover:text-red-600 ml-1" title="¡��ԡ���ԭ"><i class="fas fa-times-circle"></i></button>
+                            <button type="button" onclick="confirmCancelAdvisorInvite(event, 'co')" class="text-red-400 hover:text-red-600 ml-1" title="ยกเลิกคำเชิญ"><i class="fas fa-times-circle"></i></button>
                         <?php endif; ?>
                     </div>
                 <?php else: ?>
@@ -592,28 +640,33 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
     <div class="lg:col-span-3 bg-white p-6 rounded shadow min-h-[500px]">
         <div class="flex justify-between mb-4">
             <h2 class="font-bold text-lg"><i class="fas fa-tasks"></i> รายการงาน</h2>
-            <?php if($can_edit && $has_primary_advisor && $can_add_more_tasks): ?>
+            <?php if($can_edit && $has_confirmed_advisor && $can_add_more_tasks): ?>
                 <button onclick="document.getElementById('modal-task').classList.remove('hidden')" class="bg-purple-800 text-white px-3 py-1 rounded text-sm shadow hover:bg-purple-900">+ เพิ่มงาน</button>
             <?php endif; ?>
-            <?php if($can_edit && !$has_primary_advisor): ?>
+            <?php if($can_edit && !$has_confirmed_advisor): ?>
                 <button type="button" class="bg-gray-300 text-gray-600 px-3 py-1 rounded text-sm shadow cursor-not-allowed" disabled>+ เพิ่มงาน</button>
             <?php endif; ?>
-            <?php if($can_edit && $has_primary_advisor && !$can_add_more_tasks): ?>
+            <?php if($can_edit && $has_confirmed_advisor && !$can_add_more_tasks): ?>
                 <button type="button" class="bg-gray-300 text-gray-600 px-3 py-1 rounded text-sm shadow cursor-not-allowed" disabled>+ เพิ่มงาน (ครบ <?= MAX_TASKS_PER_PROJECT ?> งาน)</button>
             <?php endif; ?>
         </div>
-        <?php if($can_edit && !$has_primary_advisor): ?>
+        <?php if($can_edit && !$has_confirmed_advisor): ?>
             <div class="mb-4 rounded border border-yellow-200 bg-yellow-50 text-yellow-800 text-xs px-3 py-2">
-                ต้องเลือกอาจารย์ที่ปรึกษาหลักก่อน จึงจะเพิ่มงานได้
+                ต้องรออาจารย์ตอบรับเป็นที่ปรึกษาก่อน จึงจะเพิ่มงานได้
             </div>
         <?php endif; ?>
-        <?php if($can_edit && $has_primary_advisor && !$can_add_more_tasks): ?>
+        <?php if($can_edit && $has_confirmed_advisor && !$can_add_more_tasks): ?>
             <div class="mb-4 rounded border border-blue-200 bg-blue-50 text-blue-800 text-xs px-3 py-2">
                 เพิ่มงานได้สูงสุด <?= MAX_TASKS_PER_PROJECT ?> งาน (ขณะนี้ <?= $task_total_count ?>/<?= MAX_TASKS_PER_PROJECT ?> งาน)
             </div>
         <?php endif; ?>
 
         <div class="space-y-4">
+            <?php if (count($tasks_list) === 0): ?>
+                <div class="rounded border border-dashed border-gray-300 bg-gray-50 text-center text-gray-500 py-10">
+                    ยังไม่มีรายการงานในโครงงานนี้
+                </div>
+            <?php else: ?>
             <?php foreach($tasks_list as $t): 
                 $due = strtotime($t['due_date']);
                 $days = ceil(($due - time())/86400);
@@ -795,7 +848,39 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
                 </div>
             </div>
             <?php endforeach; ?>
+            <?php endif; ?>
         </div>
+
+        <?php if ($task_total_count > 0): ?>
+        <div class="mt-5 border-t pt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div class="text-xs text-gray-600">
+                แสดง <?= (int)$task_start_item ?>-<?= (int)$task_end_item ?> จาก <?= (int)$task_total_count ?> งาน
+            </div>
+            <?php if ($task_total_pages > 1): ?>
+            <div class="flex items-center gap-2 flex-wrap">
+                <?php if ($task_page > 1): ?>
+                    <a href="<?= htmlspecialchars($buildTaskPageUrl(1)) ?>" class="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-xs">หน้าแรก</a>
+                    <a href="<?= htmlspecialchars($buildTaskPageUrl($task_page - 1)) ?>" class="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-xs">ก่อนหน้า</a>
+                <?php else: ?>
+                    <span class="px-3 py-1.5 rounded border bg-gray-100 text-gray-400 text-xs cursor-not-allowed">หน้าแรก</span>
+                    <span class="px-3 py-1.5 rounded border bg-gray-100 text-gray-400 text-xs cursor-not-allowed">ก่อนหน้า</span>
+                <?php endif; ?>
+
+                <span class="px-3 py-1.5 rounded bg-purple-800 text-white text-xs">
+                    หน้า <?= (int)$task_page ?> / <?= (int)$task_total_pages ?>
+                </span>
+
+                <?php if ($task_page < $task_total_pages): ?>
+                    <a href="<?= htmlspecialchars($buildTaskPageUrl($task_page + 1)) ?>" class="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-xs">ถัดไป</a>
+                    <a href="<?= htmlspecialchars($buildTaskPageUrl($task_total_pages)) ?>" class="px-3 py-1.5 rounded border bg-white hover:bg-gray-50 text-xs">หน้าสุดท้าย</a>
+                <?php else: ?>
+                    <span class="px-3 py-1.5 rounded border bg-gray-100 text-gray-400 text-xs cursor-not-allowed">ถัดไป</span>
+                    <span class="px-3 py-1.5 rounded border bg-gray-100 text-gray-400 text-xs cursor-not-allowed">หน้าสุดท้าย</span>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -821,17 +906,17 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
 </div>
 <?php endif; ?>
 
-<?php if($can_edit && $has_primary_advisor && $can_add_more_tasks): ?>
+<?php if($can_edit && $has_confirmed_advisor && $can_add_more_tasks): ?>
 <div id="modal-task" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white p-6 rounded w-full max-w-sm">
         <h3 class="font-bold mb-4 text-lg">เพิ่มงาน</h3>
-        <form method="POST">
+        <form method="POST" id="add-task-form">
             <?= csrfInputField() ?>
             <input type="hidden" name="add_task" value="1">
             <label class="text-xs font-bold block mb-1">ชื่องาน</label><input type="text" name="task_name" required class="w-full border p-2 mb-2 rounded outline-none">
             <label class="text-xs font-bold block mb-1">ผู้รับผิดชอบ</label><select name="assignee" class="w-full border p-2 mb-2 rounded outline-none"><?php foreach($assignees as $p) echo "<option value='$p'>$p</option>"; ?></select>
             <label class="text-xs font-bold block mb-1">กำหนดส่ง</label><input type="date" name="due_date" required class="w-full border p-2 mb-4 rounded outline-none">
-            <div class="flex justify-end gap-2"><button type="button" onclick="document.getElementById('modal-task').classList.add('hidden')" class="px-3 py-1 border rounded">ยกเลิก</button><button class="px-3 py-1 bg-purple-800 text-white rounded">บันทึก</button></div>
+            <div class="flex justify-end gap-2"><button type="button" onclick="document.getElementById('modal-task').classList.add('hidden')" class="px-3 py-1 border rounded">ยกเลิก</button><button type="submit" id="add-task-submit-btn" class="px-3 py-1 bg-purple-800 text-white rounded">บันทึก</button></div>
         </form>
     </div>
 </div>
@@ -1056,10 +1141,22 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
     
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status');
-    const cleanUrl = () => window.history.replaceState(null, null, window.location.pathname + window.location.search.replace(/[\?&]status=[^&]+/, '').replace(/^&/, '?'));
+    const cleanUrl = () => {
+        const params = new URLSearchParams(window.location.search);
+        params.delete('status');
+        params.delete('wait');
+        const nextQuery = params.toString();
+        const nextUrl = window.location.pathname + (nextQuery ? `?${nextQuery}` : '');
+        window.history.replaceState(null, null, nextUrl);
+    };
     if (status === 'reviewed') Swal.fire({icon: 'success', title: 'Review saved successfully', showConfirmButton: false, timer: 1500}).then(cleanUrl);
     else if (status === 'project_updated') Swal.fire({icon: 'success', title: 'Project updated successfully', showConfirmButton: false, timer: 1500}).then(cleanUrl);
     else if (status === 'task_added') Swal.fire({icon: 'success', title: 'Task added successfully', showConfirmButton: false, timer: 1500}).then(cleanUrl);
+    else if (status === 'task_add_cooldown') {
+        const wait = Math.max(1, Number(urlParams.get('wait') || 5));
+        Swal.fire({icon: 'warning', title: 'กดเร็วเกินไป', text: `กรุณารอ ${wait} วินาที แล้วลองเพิ่มงานอีกครั้ง`}).then(cleanUrl);
+    }
+    else if (status === 'task_data_invalid') Swal.fire({icon: 'warning', title: 'ข้อมูลเพิ่มงานไม่ครบ', text: 'กรุณากรอกข้อมูลให้ครบก่อนบันทึก'}).then(cleanUrl);
     else if (status === 'task_updated') Swal.fire({icon: 'success', title: 'Task updated successfully', showConfirmButton: false, timer: 1500}).then(cleanUrl);
     else if (status === 'task_file_upload_failed') Swal.fire({icon: 'error', title: 'File upload failed', text: 'Please check file type or file size and try again.'}).then(cleanUrl);
     else if (status === 'task_deleted') Swal.fire({icon: 'success', title: 'Task deleted successfully', showConfirmButton: false, timer: 1500}).then(cleanUrl);
@@ -1070,7 +1167,7 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
     else if (status === 'student_code_not_found') Swal.fire({icon: 'error', title: 'ไม่พบเลขประจำตัวนักศึกษาในระบบ'}).then(cleanUrl);
     else if (status === 'csrf_invalid') Swal.fire({icon: 'error', title: 'คำขอไม่ถูกต้อง', text: 'กรุณาลองใหม่อีกครั้ง'}).then(cleanUrl);
     else if (status === 'advisor_error') Swal.fire({icon: 'error', title: 'เลือกซ้ำซ้อน', text: 'อาจารย์ท่านนี้อยู่ในสถานะที่ปรึกษาหลักหรือรองของโครงงานนี้แล้ว'}).then(cleanUrl);
-    else if (status === 'advisor_required_for_task') Swal.fire({icon: 'warning', title: 'ยังเพิ่มงานไม่ได้', text: 'ต้องเลือกอาจารย์ที่ปรึกษาหลักก่อน'}).then(cleanUrl);
+    else if (status === 'advisor_required_for_task') Swal.fire({icon: 'warning', title: 'ยังเพิ่มงานไม่ได้', text: 'ต้องรออาจารย์ตอบรับเป็นที่ปรึกษาก่อน'}).then(cleanUrl);
     else if (status === 'task_limit_reached') Swal.fire({icon: 'warning', title: 'เพิ่มงานได้สูงสุด <?= MAX_TASKS_PER_PROJECT ?> งาน'}).then(cleanUrl);
     else if (status === 'invalid_task') Swal.fire({icon: 'error', title: 'ไม่พบงานที่ต้องการตรวจ'}).then(cleanUrl);
 
@@ -1126,6 +1223,24 @@ $teachers = $conn->query("SELECT * FROM users WHERE role='teacher'")->fetchAll()
         primaryAdvisorSelect.addEventListener('change', syncAdvisorDropdowns);
         coAdvisorSelect.addEventListener('change', syncAdvisorDropdowns);
         syncAdvisorDropdowns();
+    }
+
+    const addTaskForm = document.getElementById('add-task-form');
+    if (addTaskForm) {
+        addTaskForm.addEventListener('submit', function (event) {
+            const submitBtn = document.getElementById('add-task-submit-btn');
+            if (!submitBtn) return;
+
+            if (submitBtn.dataset.submitting === '1') {
+                event.preventDefault();
+                return;
+            }
+
+            submitBtn.dataset.submitting = '1';
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-70', 'cursor-not-allowed');
+            submitBtn.textContent = 'กำลังบันทึก...';
+        });
     }
 
     document.querySelectorAll('.task-file-input').forEach((input) => {

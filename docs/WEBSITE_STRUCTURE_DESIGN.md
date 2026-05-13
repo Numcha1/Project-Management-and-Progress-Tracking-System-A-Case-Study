@@ -23,21 +23,27 @@
    - `/student_dashboard.php`
    - `/project_detail.php?id={projectId}`
    - `/all_tasks.php`
+   - `/proposal_center.php`
+   - `/milestone_board.php`
    - `/edit_profile.php`
 4. Teacher Area
    - `/teacher_dashboard.php`
    - `/project_detail.php?id={projectId}`
+   - `/proposal_center.php`
+   - `/milestone_board.php`
+   - `/committee_assignment.php`
 5. Admin Area
    - `/admin_dashboard.php`
    - `/create_admin.php`
+   - `/tenant_admin.php`
 6. System
    - `/logout.php`
 
 ## 4) Navigation Structure
 - Global (authenticated): Dashboard, Profile, Logout.
 - Student nav: Dashboard, Tasks, Project Detail, Profile.
-- Teacher nav: Dashboard, Student Projects, Project Detail.
-- Admin nav: Dashboard, Users, Announcements, Create Admin.
+- Teacher nav: Dashboard, Student Projects, Project Detail, Committee.
+- Admin nav: Dashboard, Users, Announcements, Create Admin, Tenant Admin.
 - Public nav: Login, Register, Forgot Password.
 
 ## 5) Page Template Structure
@@ -176,4 +182,3 @@ rmutp_project/
 5. Migrate project/profile pages.
 6. Add middleware + friendly routing.
 7. Regression test role permissions and core flows.
-

@@ -103,7 +103,7 @@ $stmt_my_projects = $conn->prepare("
 $stmt_my_projects->execute([$user_id, $user_id, $user_id, $user_id]);
 $my_projects = $stmt_my_projects->fetchAll();
 
-// --- QUERY 4: งานที่รอการตรวจสอบ (Pending Review) ---
+// --- QUERY 4: งานที่รอการตรวจสอบ (รอตรวจ) ---
 $stmt_pending_tasks = $conn->prepare("
     SELECT t.*, p.name AS project_name, p.id AS project_id
     FROM tasks t 
@@ -158,10 +158,12 @@ $completed_projects = $stmt_search->fetchAll();
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>Teacher Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แดชบอร์ดอาจารย์</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="assets/js/rmutp-ui.js"></script>
     <style>@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap'); body{font-family:'Sarabun',sans-serif;}</style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -170,14 +172,26 @@ $completed_projects = $stmt_search->fetchAll();
 <header class="sticky top-0 z-50 w-full shadow-lg">
     <nav class="bg-blue-900 text-white p-4 flex justify-between">
         <div class="font-bold text-xl flex items-center gap-2">
-            <i class="fas fa-chalkboard-teacher"></i> RMUTP Teacher
+            <i class="fas fa-chalkboard-teacher"></i> RMUTP อาจารย์
         </div>
         <div class="flex items-center gap-3">
             <span class="mr-1 text-sm opacity-90">อาจารย์ <?= htmlspecialchars($fullname) ?></span>
+            <a href="approval_center.php" class="bg-indigo-500 text-white px-3 py-1 rounded text-sm hover:bg-indigo-600 font-bold transition">
+                <i class="fas fa-route"></i> ศูนย์อนุมัติ
+            </a>
+            <a href="proposal_center.php" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 font-bold transition">
+                <i class="fas fa-file-signature"></i> ศูนย์ข้อเสนอโครงงาน
+            </a>
+            <a href="milestone_board.php" class="bg-cyan-600 text-white px-3 py-1 rounded text-sm hover:bg-cyan-700 font-bold transition">
+                <i class="fas fa-flag-checkered"></i> กระดานไมล์สโตน
+            </a>
+            <a href="committee_assignment.php" class="bg-slate-700 text-white px-3 py-1 rounded text-sm hover:bg-slate-800 font-bold transition">
+                <i class="fas fa-users"></i> กรรมการ
+            </a>
             <a href="edit_profile.php" class="bg-white text-blue-900 px-3 py-1 rounded text-sm hover:bg-gray-100 font-bold transition">
                 <i class="fas fa-user-cog"></i> แก้ไขส่วนตัว
             </a>
-            <a href="logout.php" class="bg-yellow-500 text-black px-3 py-1 rounded text-sm hover:bg-yellow-400 transition">Logout</a>
+            <a href="logout.php" class="bg-yellow-500 text-black px-3 py-1 rounded text-sm hover:bg-yellow-400 transition">ออกจากระบบ</a>
         </div>
     </nav>
 
@@ -211,7 +225,7 @@ $completed_projects = $stmt_search->fetchAll();
     <?php if(count($pending_main) > 0 || count($pending_co) > 0): ?>
     <div class="mb-10 animate-fade-in-down">
         <h3 class="font-bold text-xl text-yellow-700 mb-4 flex items-center">
-            <i class="fas fa-bell mr-2 animate-swing"></i> คำขอเป็นที่ปรึกษา (Pending Request)
+            <i class="fas fa-bell mr-2 animate-swing"></i> คำขอเป็นที่ปรึกษา (คำขอที่รอพิจารณา: <span data-rt-teacher-pending-advisor-requests><?= (int)(count($pending_main) + count($pending_co)) ?></span>)
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <?php foreach($pending_main as $p): ?>
@@ -219,13 +233,13 @@ $completed_projects = $stmt_search->fetchAll();
                 <div>
                     <div class="flex justify-between items-start">
                         <h4 class="font-bold text-lg text-gray-800"><?= htmlspecialchars($p['name']) ?></h4>
-                        <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full font-bold">Main Advisor</span>
+                        <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full font-bold">อาจารย์ที่ปรึกษาหลัก</span>
                     </div>
                     <p class="text-sm text-gray-600 mt-2">โดย: <?= htmlspecialchars($p['student_name']) ?></p>
                 </div>
                 <div class="flex gap-2 mt-4 pt-4 border-t">
                     <a href="?action=accept&project_id=<?= $p['id'] ?>&type=main" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-center py-2 rounded text-sm shadow transition"><i class="fas fa-check-circle"></i> ตอบรับ</a>
-                    <a href="?action=decline&project_id=<?= $p['id'] ?>&type=main" onclick="return confirm('ปฏิเสธ?')" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 text-center py-2 rounded text-sm transition">ปฏิเสธ</a>
+                    <a href="#" onclick="confirmAdvisorDecline(event, <?= (int)$p['id'] ?>, 'main')" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 text-center py-2 rounded text-sm transition">ปฏิเสธ</a>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -234,13 +248,13 @@ $completed_projects = $stmt_search->fetchAll();
                 <div>
                     <div class="flex justify-between items-start">
                         <h4 class="font-bold text-lg text-gray-800"><?= htmlspecialchars($p['name']) ?></h4>
-                        <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">Co-Advisor</span>
+                        <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">อาจารย์ที่ปรึกษาร่วม</span>
                     </div>
                     <p class="text-sm text-gray-600 mt-2">โดย: <?= htmlspecialchars($p['student_name']) ?></p>
                 </div>
                 <div class="flex gap-2 mt-4 pt-4 border-t">
                     <a href="?action=accept&project_id=<?= $p['id'] ?>&type=co" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-center py-2 rounded text-sm shadow transition"><i class="fas fa-check-circle"></i> ตอบรับ</a>
-                    <a href="?action=decline&project_id=<?= $p['id'] ?>&type=co" onclick="return confirm('ปฏิเสธ?')" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 text-center py-2 rounded text-sm transition">ปฏิเสธ</a>
+                    <a href="#" onclick="confirmAdvisorDecline(event, <?= (int)$p['id'] ?>, 'co')" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 text-center py-2 rounded text-sm transition">ปฏิเสธ</a>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -256,7 +270,7 @@ $completed_projects = $stmt_search->fetchAll();
         <div class="lg:col-span-2 space-y-4">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="font-bold text-xl text-blue-900 flex items-center">
-                    <i class="fas fa-folder-open mr-2"></i> โครงงานภายใต้การดูแล (<?= count($my_projects) ?>)
+                    <i class="fas fa-folder-open mr-2"></i> โครงงานภายใต้การดูแล (<span data-rt-teacher-my-projects><?= (int)count($my_projects) ?></span>)
                 </h3>
             </div>
 
@@ -308,11 +322,11 @@ $completed_projects = $stmt_search->fetchAll();
             <?php endif; ?>
         </div>
 
-        <!-- ฝั่งขวา: งานที่รอตรวจ (Pending Review) -->
+        <!-- ฝั่งขวา: งานที่รอตรวจ (รอตรวจ) -->
         <div class="space-y-3">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="font-bold text-lg text-gray-700"><i class="fas fa-tasks mr-2"></i> งานที่รอตรวจ</h3>
-                <span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-bold"><?= $total_pending_tasks ?> รอตรวจ</span>
+                <span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-bold"><span data-rt-teacher-pending-tasks><?= (int)$total_pending_tasks ?></span> รอตรวจ</span>
             </div>
             
             <?php if($total_pending_tasks > 0): ?>
@@ -353,7 +367,7 @@ $completed_projects = $stmt_search->fetchAll();
 
                 <?php if($total_pending_tasks > 2): ?>
                 <button onclick="document.getElementById('modal-all-tasks').classList.remove('hidden')" class="w-full text-center text-sm text-blue-700 hover:text-blue-900 font-bold mt-2 bg-blue-50 p-2 rounded hover:bg-blue-100 transition">
-                    ดูงานที่รอตรวจทั้งหมด (<?= $total_pending_tasks ?>) <i class="fas fa-list"></i>
+                    ดูงานที่รอตรวจทั้งหมด (<span data-rt-teacher-pending-tasks><?= (int)$total_pending_tasks ?></span>) <i class="fas fa-list"></i>
                 </button>
                 <?php endif; ?>
 
@@ -486,7 +500,7 @@ $completed_projects = $stmt_search->fetchAll();
 <div id="modal-all-tasks" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg w-full max-w-4xl shadow-2xl h-[80vh] flex flex-col">
         <div class="p-4 border-b flex justify-between items-center bg-blue-900 text-white rounded-t-lg">
-            <h3 class="font-bold text-lg"><i class="fas fa-tasks mr-2"></i> งานที่รอการตรวจสอบทั้งหมด (<?= $total_pending_tasks ?>)</h3>
+            <h3 class="font-bold text-lg"><i class="fas fa-tasks mr-2"></i> งานที่รอการตรวจสอบทั้งหมด (<span data-rt-teacher-pending-tasks><?= (int)$total_pending_tasks ?></span>)</h3>
             <button onclick="document.getElementById('modal-all-tasks').classList.add('hidden')" class="text-white hover:text-gray-300 text-xl font-bold">&times;</button>
         </div>
         
@@ -589,54 +603,60 @@ $completed_projects = $stmt_search->fetchAll();
 </div>
 
 <script>
-    function openFile(path) {
-        if (!path) return;
+    window.openFile = function (path) {
+        window.RMUTP.openFilePreview(path);
+    };
 
-        const lower = String(path).toLowerCase();
-        const previewable = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt'];
-        const canPreviewInIframe = previewable.some((ext) => lower.endsWith(ext));
+    window.RMUTP.showStatusFromQuery({
+        accepted: { icon: 'success', title: 'ตอบรับเรียบร้อย', showConfirmButton: false, timer: 1500 },
+        declined: { icon: 'info', title: 'ปฏิเสธเรียบร้อย', showConfirmButton: false, timer: 1500 },
+        reviewed: { icon: 'success', title: 'บันทึกผลการตรวจแล้ว', showConfirmButton: false, timer: 1500 }
+    });
 
-        if (canPreviewInIframe) {
-            document.getElementById('file-viewer').src = path;
-            document.getElementById('modal-file').classList.remove('hidden');
-            return;
-        }
+    const applyRealtimeTeacher = function (data) {
+        const counters = data && data.counters ? data.counters : {};
+        window.RMUTP.updateTextMany('[data-rt-teacher-pending-tasks]', Number(counters.pending_tasks ?? 0));
+        window.RMUTP.updateTextMany('[data-rt-teacher-my-projects]', Number(counters.my_projects ?? 0));
+        window.RMUTP.updateTextMany('[data-rt-teacher-pending-advisor-requests]', Number(counters.pending_advisor_requests ?? 0));
+    };
 
-        window.open(path, '_blank', 'noopener');
-    }
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const status = urlParams.get('status');
+    const stopRealtime = window.RMUTP.startRealtimePoller({
+        scope: 'teacher',
+        intervalMs: 12000,
+        onData: applyRealtimeTeacher
+    });
 
-    if (status === 'accepted') {
-        Swal.fire({icon: 'success', title: 'ตอบรับเรียบร้อย', showConfirmButton: false, timer: 1500}).then(() => window.history.replaceState(null, null, window.location.pathname));
-    } else if (status === 'declined') {
-        Swal.fire({icon: 'info', title: 'ปฏิเสธเรียบร้อย', showConfirmButton: false, timer: 1500}).then(() => window.history.replaceState(null, null, window.location.pathname));
-    } else if (status === 'reviewed') {
-        Swal.fire({icon: 'success', title: 'บันทึกผลการตรวจแล้ว', showConfirmButton: false, timer: 1500}).then(() => window.history.replaceState(null, null, window.location.pathname));
-    }
+    window.addEventListener('beforeunload', stopRealtime);
+    window.RMUTP.attachFormSubmitGuard();
+    window.RMUTP.attachActionLinkGuard('a[href*="action=accept&project_id="]', 'กำลังตอบรับคำเชิญ...');
 
-    // ฟังก์ชัน SweetAlert สำหรับกดยืนยันการตรวจงาน
-    function confirmReview(event, actionType, taskId, projectId) {
-        event.preventDefault();
-        
-        let titleText = actionType === 'approve' ? 'ยืนยันให้ผ่าน?' : 'ส่งกลับให้แก้ไข?';
-        let confirmColor = actionType === 'approve' ? '#16a34a' : '#ef4444';
-        
-        Swal.fire({
+    window.confirmReview = function (event, actionType, taskId, projectId) {
+        const titleText = actionType === 'approve' ? 'ยืนยันให้ผ่าน?' : 'ส่งกลับให้แก้ไข?';
+        const confirmColor = actionType === 'approve' ? '#16a34a' : '#ef4444';
+        window.RMUTP.confirmAndNavigate(event, {
             title: titleText,
             icon: 'question',
-            showCancelButton: true,
             confirmButtonColor: confirmColor,
             cancelButtonColor: '#6b7280',
             confirmButtonText: 'ตกลง',
-            cancelButtonText: 'ยกเลิก'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                window.location.href = `?review_task=${actionType}&task_id=${taskId}&project_id=${projectId}`;
-            }
+            cancelButtonText: 'ยกเลิก',
+            url: `?review_task=${actionType}&task_id=${taskId}&project_id=${projectId}`,
+            loadingText: 'กำลังบันทึกผลการตรวจ...'
         });
-    }
+    };
+
+    window.confirmAdvisorDecline = function (event, projectId, type) {
+        window.RMUTP.confirmAndNavigate(event, {
+            title: 'ยืนยันปฏิเสธคำเชิญ?',
+            icon: 'question',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'ปฏิเสธ',
+            cancelButtonText: 'ยกเลิก',
+            url: `?action=decline&project_id=${projectId}&type=${type}`,
+            loadingText: 'กำลังอัปเดตคำเชิญ...'
+        });
+    };
 </script>
 
 </body>
