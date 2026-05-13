@@ -435,6 +435,307 @@ CREATE TABLE IF NOT EXISTS advisor_meetings (
         ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS project_approval_requests (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    project_id INT UNSIGNED NOT NULL,
+    submitted_by INT UNSIGNED NOT NULL,
+    current_step TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    total_steps TINYINT UNSIGNED NOT NULL DEFAULT 2,
+    status ENUM('pending', 'approved', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
+    last_action_by INT UNSIGNED DEFAULT NULL,
+    last_action_note VARCHAR(255) DEFAULT NULL,
+    submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    decided_at DATETIME DEFAULT NULL,
+    PRIMARY KEY (id),
+    KEY idx_par_project_status (project_id, status),
+    KEY idx_par_status_step (status, current_step),
+    KEY idx_par_submitted_by (submitted_by),
+    KEY idx_par_last_action_by (last_action_by),
+    CONSTRAINT fk_par_project
+        FOREIGN KEY (project_id) REFERENCES projects(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_par_submitted_by
+        FOREIGN KEY (submitted_by) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_par_last_action_by
+        FOREIGN KEY (last_action_by) REFERENCES users(id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS project_approval_actions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    request_id BIGINT UNSIGNED NOT NULL,
+    step_no TINYINT UNSIGNED NOT NULL,
+    action_key ENUM('submitted', 'resubmitted', 'approved', 'rejected', 'cancelled') NOT NULL DEFAULT 'submitted',
+    action_by INT UNSIGNED NOT NULL,
+    action_role ENUM('student', 'teacher', 'admin') NOT NULL DEFAULT 'student',
+    note TEXT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_paa_request_id (request_id),
+    KEY idx_paa_action_by (action_by),
+    KEY idx_paa_action_key (action_key),
+    KEY idx_paa_created_at (created_at),
+    CONSTRAINT fk_paa_request
+        FOREIGN KEY (request_id) REFERENCES project_approval_requests(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_paa_action_by
+        FOREIGN KEY (action_by) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS proposals (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    project_id INT UNSIGNED NOT NULL,
+    submitted_by INT UNSIGNED NOT NULL,
+    current_version_no INT UNSIGNED NOT NULL DEFAULT 1,
+    status ENUM('draft', 'submitted', 'in_review', 'approved', 'rejected', 'revise_required') NOT NULL DEFAULT 'draft',
+    program_code VARCHAR(50) DEFAULT NULL,
+    semester_label VARCHAR(50) DEFAULT NULL,
+    title VARCHAR(255) NOT NULL,
+    objective TEXT DEFAULT NULL,
+    summary TEXT DEFAULT NULL,
+    last_decision_note VARCHAR(255) DEFAULT NULL,
+    submitted_at DATETIME DEFAULT NULL,
+    decided_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_proposals_project_id (project_id),
+    KEY idx_proposals_status (status),
+    KEY idx_proposals_program_code (program_code),
+    KEY idx_proposals_submitted_by (submitted_by),
+    CONSTRAINT fk_proposals_project
+        FOREIGN KEY (project_id) REFERENCES projects(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_proposals_submitted_by
+        FOREIGN KEY (submitted_by) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS proposal_versions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    proposal_id BIGINT UNSIGNED NOT NULL,
+    version_no INT UNSIGNED NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    objective TEXT DEFAULT NULL,
+    summary TEXT DEFAULT NULL,
+    status_snapshot ENUM('draft', 'submitted', 'in_review', 'approved', 'rejected', 'revise_required') NOT NULL DEFAULT 'draft',
+    changed_by INT UNSIGNED NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_proposal_versions_unique (proposal_id, version_no),
+    KEY idx_proposal_versions_changed_by (changed_by),
+    CONSTRAINT fk_proposal_versions_proposal
+        FOREIGN KEY (proposal_id) REFERENCES proposals(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_proposal_versions_changed_by
+        FOREIGN KEY (changed_by) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS proposal_reviews (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    proposal_id BIGINT UNSIGNED NOT NULL,
+    reviewer_id INT UNSIGNED NOT NULL,
+    action_key ENUM('comment', 'approved', 'rejected', 'revise_required') NOT NULL DEFAULT 'comment',
+    note TEXT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_proposal_reviews_proposal_id (proposal_id),
+    KEY idx_proposal_reviews_reviewer_id (reviewer_id),
+    KEY idx_proposal_reviews_action_key (action_key),
+    CONSTRAINT fk_proposal_reviews_proposal
+        FOREIGN KEY (proposal_id) REFERENCES proposals(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_proposal_reviews_reviewer
+        FOREIGN KEY (reviewer_id) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS proposal_committees (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    proposal_id BIGINT UNSIGNED NOT NULL,
+    quorum_min TINYINT UNSIGNED NOT NULL DEFAULT 2,
+    status ENUM('draft', 'active', 'closed') NOT NULL DEFAULT 'draft',
+    created_by INT UNSIGNED NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_proposal_committees_proposal (proposal_id),
+    KEY idx_proposal_committees_status (status),
+    CONSTRAINT fk_proposal_committees_proposal
+        FOREIGN KEY (proposal_id) REFERENCES proposals(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_proposal_committees_created_by
+        FOREIGN KEY (created_by) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS proposal_committee_members (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    committee_id BIGINT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    role_key ENUM('advisor', 'reviewer', 'chair') NOT NULL DEFAULT 'reviewer',
+    can_vote TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_proposal_committee_member (committee_id, user_id),
+    KEY idx_proposal_committee_members_role (role_key),
+    CONSTRAINT fk_proposal_committee_members_committee
+        FOREIGN KEY (committee_id) REFERENCES proposal_committees(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_proposal_committee_members_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS milestone_templates (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    program_code VARCHAR(50) NOT NULL,
+    template_name VARCHAR(180) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_by INT UNSIGNED DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_milestone_templates_program_name (program_code, template_name),
+    KEY idx_milestone_templates_active (is_active),
+    CONSTRAINT fk_milestone_templates_created_by
+        FOREIGN KEY (created_by) REFERENCES users(id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS milestone_template_items (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    template_id BIGINT UNSIGNED NOT NULL,
+    sequence_no SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    title VARCHAR(180) NOT NULL,
+    default_due_offset_days SMALLINT NOT NULL DEFAULT 14,
+    weight_percent DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    lock_before_submission TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_milestone_template_items_template_id (template_id),
+    KEY idx_milestone_template_items_sequence (template_id, sequence_no),
+    CONSTRAINT fk_milestone_template_items_template
+        FOREIGN KEY (template_id) REFERENCES milestone_templates(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS milestone_progress_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    milestone_id INT UNSIGNED NOT NULL,
+    action_key ENUM('created', 'updated', 'status_change', 'locked', 'unlocked') NOT NULL DEFAULT 'updated',
+    before_status VARCHAR(50) DEFAULT NULL,
+    after_status VARCHAR(50) DEFAULT NULL,
+    note VARCHAR(255) DEFAULT NULL,
+    action_by INT UNSIGNED DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_milestone_progress_logs_milestone_id (milestone_id),
+    KEY idx_milestone_progress_logs_action_key (action_key),
+    CONSTRAINT fk_milestone_progress_logs_milestone
+        FOREIGN KEY (milestone_id) REFERENCES project_milestones(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_milestone_progress_logs_action_by
+        FOREIGN KEY (action_by) REFERENCES users(id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS backup_restore_checks (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    backup_file VARCHAR(255) NOT NULL,
+    backup_scope VARCHAR(80) NOT NULL DEFAULT 'tenant',
+    verified_by INT UNSIGNED DEFAULT NULL,
+    status ENUM('pending', 'verified', 'failed') NOT NULL DEFAULT 'pending',
+    note VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    verified_at DATETIME DEFAULT NULL,
+    PRIMARY KEY (id),
+    KEY idx_backup_restore_checks_status (status),
+    KEY idx_backup_restore_checks_created_at (created_at),
+    CONSTRAINT fk_backup_restore_checks_verified_by
+        FOREIGN KEY (verified_by) REFERENCES users(id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS retention_cleanup_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    target_key VARCHAR(80) NOT NULL,
+    retained_days SMALLINT UNSIGNED NOT NULL DEFAULT 365,
+    affected_rows INT UNSIGNED NOT NULL DEFAULT 0,
+    status ENUM('success', 'failed') NOT NULL DEFAULT 'success',
+    note VARCHAR(255) DEFAULT NULL,
+    executed_by INT UNSIGNED DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_retention_cleanup_logs_target_key (target_key),
+    KEY idx_retention_cleanup_logs_created_at (created_at),
+    CONSTRAINT fk_retention_cleanup_logs_executed_by
+        FOREIGN KEY (executed_by) REFERENCES users(id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS system_job_queue (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    job_type VARCHAR(80) NOT NULL,
+    payload_json LONGTEXT DEFAULT NULL,
+    priority SMALLINT NOT NULL DEFAULT 0,
+    status ENUM('pending', 'running', 'done', 'failed', 'cancelled') NOT NULL DEFAULT 'pending',
+    available_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    locked_at DATETIME DEFAULT NULL,
+    locked_by VARCHAR(120) DEFAULT NULL,
+    attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
+    max_attempts INT UNSIGNED NOT NULL DEFAULT 3,
+    dedupe_key VARCHAR(191) DEFAULT NULL,
+    last_error TEXT DEFAULT NULL,
+    created_by INT UNSIGNED DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    finished_at DATETIME DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_system_job_queue_dedupe (dedupe_key),
+    KEY idx_system_job_queue_status_available (status, available_at, priority, id),
+    KEY idx_system_job_queue_locked (locked_by, locked_at),
+    KEY idx_system_job_queue_type_status (job_type, status),
+    CONSTRAINT fk_system_job_queue_created_by
+        FOREIGN KEY (created_by) REFERENCES users(id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS system_job_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    job_id BIGINT UNSIGNED NOT NULL,
+    event_type ENUM('queued', 'started', 'done', 'failed', 'cancelled', 'requeued') NOT NULL DEFAULT 'queued',
+    message VARCHAR(255) DEFAULT NULL,
+    context_json LONGTEXT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_system_job_logs_job_id (job_id),
+    KEY idx_system_job_logs_event_type (event_type),
+    KEY idx_system_job_logs_created_at (created_at),
+    CONSTRAINT fk_system_job_logs_job
+        FOREIGN KEY (job_id) REFERENCES system_job_queue(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS system_worker_heartbeats (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    worker_id VARCHAR(120) NOT NULL,
+    hostname VARCHAR(120) DEFAULT NULL,
+    tenant_code VARCHAR(40) DEFAULT NULL,
+    last_status VARCHAR(40) NOT NULL DEFAULT 'idle',
+    processed_count INT UNSIGNED NOT NULL DEFAULT 0,
+    failed_count INT UNSIGNED NOT NULL DEFAULT 0,
+    last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_system_worker_heartbeats_worker_id (worker_id),
+    KEY idx_system_worker_heartbeats_last_seen_at (last_seen_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO announcements (id, message, created_at)
 SELECT 1, '', NOW()
 WHERE NOT EXISTS (
@@ -452,7 +753,13 @@ VALUES
     ('deadline_reminder_enabled', '1'),
     ('deadline_reminder_days', '3'),
     ('deadline_reminder_interval_minutes', '10'),
-    ('deadline_reminder_last_run', '0')
+    ('deadline_reminder_last_run', '0'),
+    ('worker_deadline_interval_minutes', '10'),
+    ('worker_backup_interval_minutes', '60'),
+    ('worker_retention_interval_minutes', '1440'),
+    ('worker_retention_audit_days', '365'),
+    ('worker_retention_notification_log_days', '60'),
+    ('worker_retention_cleanup_log_days', '90')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
 -- ===== Incremental Upgrade Section =====
@@ -535,11 +842,34 @@ ALTER TABLE audit_logs
     ADD COLUMN IF NOT EXISTS target_type VARCHAR(80) DEFAULT NULL AFTER action_detail,
     ADD COLUMN IF NOT EXISTS target_id INT UNSIGNED DEFAULT NULL AFTER target_type,
     ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45) DEFAULT NULL AFTER target_id,
-    ADD COLUMN IF NOT EXISTS created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER ip_address,
+    ADD COLUMN IF NOT EXISTS actor_role VARCHAR(40) DEFAULT NULL AFTER ip_address,
+    ADD COLUMN IF NOT EXISTS request_id VARCHAR(120) DEFAULT NULL AFTER actor_role,
+    ADD COLUMN IF NOT EXISTS tenant_code VARCHAR(40) DEFAULT NULL AFTER request_id,
+    ADD COLUMN IF NOT EXISTS before_payload JSON DEFAULT NULL AFTER tenant_code,
+    ADD COLUMN IF NOT EXISTS after_payload JSON DEFAULT NULL AFTER before_payload,
+    ADD COLUMN IF NOT EXISTS created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER after_payload,
     ADD KEY IF NOT EXISTS idx_audit_logs_actor_id (actor_id),
     ADD KEY IF NOT EXISTS idx_audit_logs_action_key (action_key),
     ADD KEY IF NOT EXISTS idx_audit_logs_target (target_type, target_id),
-    ADD KEY IF NOT EXISTS idx_audit_logs_created_at (created_at);
+    ADD KEY IF NOT EXISTS idx_audit_logs_created_at (created_at),
+    ADD KEY IF NOT EXISTS idx_audit_logs_request_id (request_id),
+    ADD KEY IF NOT EXISTS idx_audit_logs_tenant_code (tenant_code);
+
+ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS proposal_status ENUM('not_started', 'draft', 'submitted', 'approved', 'rejected', 'revise_required') NOT NULL DEFAULT 'not_started' AFTER status,
+    ADD COLUMN IF NOT EXISTS program_code VARCHAR(50) DEFAULT NULL AFTER proposal_status,
+    ADD COLUMN IF NOT EXISTS semester_label VARCHAR(50) DEFAULT NULL AFTER program_code,
+    ADD KEY IF NOT EXISTS idx_projects_proposal_status (proposal_status),
+    ADD KEY IF NOT EXISTS idx_projects_program_code (program_code);
+
+ALTER TABLE project_milestones
+    ADD COLUMN IF NOT EXISTS template_item_id BIGINT UNSIGNED DEFAULT NULL AFTER project_id,
+    ADD COLUMN IF NOT EXISTS locked_by_policy TINYINT(1) NOT NULL DEFAULT 0 AFTER status,
+    ADD COLUMN IF NOT EXISTS lock_until DATETIME DEFAULT NULL AFTER locked_by_policy,
+    ADD COLUMN IF NOT EXISTS reviewed_by INT UNSIGNED DEFAULT NULL AFTER created_by,
+    ADD COLUMN IF NOT EXISTS reviewed_at DATETIME DEFAULT NULL AFTER reviewed_by,
+    ADD KEY IF NOT EXISTS idx_project_milestones_template_item_id (template_item_id),
+    ADD KEY IF NOT EXISTS idx_project_milestones_locked_by_policy (locked_by_policy);
 
 ALTER TABLE notifications
     ADD COLUMN IF NOT EXISTS type ENUM('info', 'success', 'warning', 'error') NOT NULL DEFAULT 'info' AFTER message,
@@ -579,10 +909,515 @@ VALUES
     ('deadline_reminder_enabled', '1'),
     ('deadline_reminder_days', '3'),
     ('deadline_reminder_interval_minutes', '10'),
-    ('deadline_reminder_last_run', '0')
+    ('deadline_reminder_last_run', '0'),
+    ('worker_deadline_interval_minutes', '10'),
+    ('worker_backup_interval_minutes', '60'),
+    ('worker_retention_interval_minutes', '1440'),
+    ('worker_retention_audit_days', '365'),
+    ('worker_retention_notification_log_days', '60'),
+    ('worker_retention_cleanup_log_days', '90')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
 -- Cleanup legacy/unused settings keys (kept for backward compatibility in older versions)
 DELETE FROM system_settings
 WHERE setting_key IN ('allow_registration', 'items_per_page', 'system_name');
+
+-- =========================================================
+-- DEMO FLOW DATASET (idempotent)
+-- Purpose:
+--   Seed complete demo flow data for Student -> Teacher -> Admin -> Evaluation
+-- Notes:
+--   - Safe to run multiple times.
+--   - Demo password for all inserted users: DemoPass123!
+-- =========================================================
+
+-- 1) Demo users by role
+INSERT INTO users (fullname, student_code, email, password, role, created_at, updated_at)
+VALUES
+    ('System Admin Demo', NULL, 'admin.demo@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'admin', NOW(), NOW()),
+    ('Dr. Nattapong R.', NULL, 'teacher.one@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'teacher', NOW(), NOW()),
+    ('Asst. Prof. Siriporn K.', NULL, 'teacher.two@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'teacher', NOW(), NOW()),
+    ('Somchai Student', '653040001-1', 'student.one@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'student', NOW(), NOW()),
+    ('Suda Student', '653040002-1', 'student.two@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'student', NOW(), NOW()),
+    ('Krit Student', '653040003-1', 'student.three@rmutp.ac.th', '$2y$10$ZXjaz8IMQbGwbLmqZYCbnuLZ/w3AgCV3ll.d8ZshgT6FNhEG38CtG', 'student', NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+    fullname = VALUES(fullname),
+    student_code = VALUES(student_code),
+    password = VALUES(password),
+    role = VALUES(role),
+    updated_at = NOW();
+
+-- 2) Ensure admin permission row
+INSERT INTO admin_permissions (
+    admin_id,
+    can_manage_users,
+    can_manage_projects,
+    can_manage_announcements,
+    can_manage_settings,
+    can_manage_permissions,
+    can_backup_restore,
+    can_view_audit,
+    can_send_notifications,
+    updated_at
+)
+SELECT
+    u.id,
+    1, 1, 1, 1, 1, 1, 1, 1,
+    NOW()
+FROM users u
+LEFT JOIN admin_permissions ap ON ap.admin_id = u.id
+WHERE u.email = 'admin.demo@rmutp.ac.th'
+  AND ap.admin_id IS NULL;
+
+-- 3) Rubric criteria used by evaluation flow
+INSERT INTO rubric_criteria (criterion_key, title, description, max_score, is_active, created_at, updated_at)
+VALUES
+    ('problem_analysis', 'การวิเคราะห์ปัญหาและโจทย์', 'ความชัดเจนของปัญหา วัตถุประสงค์ และขอบเขตโครงงาน', 20.00, 1, NOW(), NOW()),
+    ('method_design', 'การออกแบบวิธีดำเนินงาน', 'ความเหมาะสมของแนวทาง เครื่องมือ และแผนการดำเนินงาน', 20.00, 1, NOW(), NOW()),
+    ('implementation_quality', 'คุณภาพการพัฒนาและผลงาน', 'ความถูกต้อง ความสมบูรณ์ และความเสถียรของระบบ', 25.00, 1, NOW(), NOW()),
+    ('documentation_presentation', 'เอกสารและการนำเสนอ', 'ความครบถ้วนของเอกสารและการสื่อสารผลงาน', 15.00, 1, NOW(), NOW()),
+    ('impact_and_improvement', 'ผลกระทบและแนวทางต่อยอด', 'การประยุกต์ใช้จริงและข้อเสนอแนะในการพัฒนาต่อ', 20.00, 1, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+    title = VALUES(title),
+    description = VALUES(description),
+    max_score = VALUES(max_score),
+    is_active = VALUES(is_active),
+    updated_at = NOW();
+
+-- 3.1) Milestone templates for lifecycle suite
+INSERT INTO milestone_templates (program_code, template_name, is_active, created_by, created_at, updated_at)
+SELECT 'GENERIC-BIT', 'Default Project Lifecycle', 1, u.id, NOW(), NOW()
+FROM users u
+WHERE u.email = 'admin.demo@rmutp.ac.th'
+ON DUPLICATE KEY UPDATE
+    is_active = VALUES(is_active),
+    updated_at = NOW();
+
+INSERT INTO milestone_template_items (
+    template_id, sequence_no, title, default_due_offset_days, weight_percent, lock_before_submission, created_at
+)
+SELECT mt.id, seed.sequence_no, seed.title, seed.default_due_offset_days, seed.weight_percent, seed.lock_before_submission, NOW()
+FROM milestone_templates mt
+JOIN (
+    SELECT 1 AS sequence_no, 'Proposal Submission' AS title, 7 AS default_due_offset_days, 10.00 AS weight_percent, 0 AS lock_before_submission
+    UNION ALL SELECT 2, 'Requirement Validation', 21, 20.00, 1
+    UNION ALL SELECT 3, 'Implementation Sprint', 45, 40.00, 1
+    UNION ALL SELECT 4, 'Pre-Defense Review', 60, 30.00, 1
+) AS seed
+WHERE mt.program_code = 'GENERIC-BIT'
+  AND mt.template_name = 'Default Project Lifecycle'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM milestone_template_items mti
+      WHERE mti.template_id = mt.id AND mti.sequence_no = seed.sequence_no
+  );
+
+-- 4) Demo projects for KPI/report/evaluation
+INSERT INTO projects (
+    name, description, case_study, student_id,
+    status, progress, advisor_id, co_advisor_id,
+    created_at, updated_at
+)
+SELECT
+    'Smart Library Queue System',
+    'Queue and borrowing optimization system for university library service points.',
+    'RMUTP Central Library',
+    s1.id,
+    'in_progress',
+    60,
+    t1.id,
+    t2.id,
+    '2026-01-15 09:00:00',
+    NOW()
+FROM users s1
+JOIN users t1 ON t1.email = 'teacher.one@rmutp.ac.th'
+JOIN users t2 ON t2.email = 'teacher.two@rmutp.ac.th'
+WHERE s1.email = 'student.one@rmutp.ac.th'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM projects p
+      WHERE p.name = 'Smart Library Queue System' AND p.student_id = s1.id
+  );
+
+INSERT INTO projects (
+    name, description, case_study, student_id,
+    status, progress, advisor_id, co_advisor_id,
+    created_at, updated_at
+)
+SELECT
+    'Student Health Monitoring Platform',
+    'Web platform for student wellness tracking and advisor follow-up workflow.',
+    'Faculty of Science and Technology',
+    s2.id,
+    'completed',
+    100,
+    t1.id,
+    t2.id,
+    '2026-02-10 10:00:00',
+    NOW()
+FROM users s2
+JOIN users t1 ON t1.email = 'teacher.one@rmutp.ac.th'
+JOIN users t2 ON t2.email = 'teacher.two@rmutp.ac.th'
+WHERE s2.email = 'student.two@rmutp.ac.th'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM projects p
+      WHERE p.name = 'Student Health Monitoring Platform' AND p.student_id = s2.id
+  );
+
+-- 5) Project members (accepted + pending)
+INSERT INTO project_members (project_id, user_id, status, created_at)
+SELECT p.id, u.id, 'accepted', NOW()
+FROM projects p
+JOIN users u ON u.email = 'student.two@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_members pm
+      WHERE pm.project_id = p.id AND pm.user_id = u.id
+  );
+
+INSERT INTO project_members (project_id, user_id, status, created_at)
+SELECT p.id, u.id, 'pending', NOW()
+FROM projects p
+JOIN users u ON u.email = 'student.three@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_members pm
+      WHERE pm.project_id = p.id AND pm.user_id = u.id
+  );
+
+-- 6) Tasks across states (todo/done + approved/pending/rejected)
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Requirement Analysis', 'Somchai Student', '2026-02-01', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Requirement Analysis'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'UI Prototype', 'Suda Student', '2026-03-01', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'UI Prototype'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Queue Engine Development', 'Somchai Student', '2026-04-10', 'done', 'pending', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Queue Engine Development'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Load Testing', 'Suda Student', '2026-04-25', 'todo', 'pending', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Load Testing'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Final Report', 'Somchai Student', '2026-05-01', 'todo', 'rejected', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Final Report'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Health Data Model', 'Suda Student', '2026-02-20', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Health Data Model'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Dashboard Integration', 'Suda Student', '2026-03-20', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Dashboard Integration'
+  );
+
+INSERT INTO tasks (project_id, name, assignee_name, due_date, status, teacher_status, file_path, created_at, updated_at)
+SELECT p.id, 'Advisor Notification Flow', 'Krit Student', '2026-04-05', 'done', 'approved', NULL, NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND NOT EXISTS (
+      SELECT 1 FROM tasks t WHERE t.project_id = p.id AND t.name = 'Advisor Notification Flow'
+  );
+
+-- 7) Return history example (for rejected flow)
+INSERT INTO task_return_history (task_id, project_id, reviewer_id, note, attachment_path, created_at)
+SELECT
+    t.id,
+    p.id,
+    te.id,
+    'Please revise with measurable KPIs and clearer acceptance criteria.',
+    NULL,
+    NOW()
+FROM projects p
+JOIN tasks t ON t.project_id = p.id AND t.name = 'Final Report'
+JOIN users te ON te.email = 'teacher.one@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM task_return_history trh
+      WHERE trh.task_id = t.id AND trh.reviewer_id = te.id
+  );
+
+-- 8) Project evaluations (rubric summary)
+INSERT INTO project_evaluations (
+    project_id, evaluator_id, evaluation_round,
+    total_score, max_score, result, comment, evaluated_at
+)
+SELECT
+    p.id,
+    te.id,
+    1,
+    70.00,
+    100.00,
+    'revise',
+    'Core idea is strong. Please improve testing evidence and deployment readiness.',
+    NOW()
+FROM projects p
+JOIN users te ON te.email = 'teacher.one@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_evaluations pe
+      WHERE pe.project_id = p.id AND pe.evaluator_id = te.id AND pe.evaluation_round = 1
+  );
+
+INSERT INTO project_evaluations (
+    project_id, evaluator_id, evaluation_round,
+    total_score, max_score, result, comment, evaluated_at
+)
+SELECT
+    p.id,
+    te.id,
+    1,
+    91.00,
+    100.00,
+    'pass',
+    'Well-balanced implementation with strong advisor workflow and reporting quality.',
+    NOW()
+FROM projects p
+JOIN users te ON te.email = 'teacher.two@rmutp.ac.th'
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_evaluations pe
+      WHERE pe.project_id = p.id AND pe.evaluator_id = te.id AND pe.evaluation_round = 1
+  );
+
+-- 9) Evaluation scores by rubric criteria
+INSERT INTO evaluation_scores (evaluation_id, criterion_id, score, note, created_at)
+SELECT
+    pe.id,
+    rc.id,
+    CASE rc.criterion_key
+        WHEN 'problem_analysis' THEN 16.00
+        WHEN 'method_design' THEN 14.00
+        WHEN 'implementation_quality' THEN 18.00
+        WHEN 'documentation_presentation' THEN 10.00
+        WHEN 'impact_and_improvement' THEN 12.00
+        ELSE 0.00
+    END,
+    NULL,
+    NOW()
+FROM project_evaluations pe
+JOIN projects p ON p.id = pe.project_id
+JOIN rubric_criteria rc ON rc.is_active = 1
+WHERE p.name = 'Smart Library Queue System'
+  AND pe.evaluation_round = 1
+  AND NOT EXISTS (
+      SELECT 1
+      FROM evaluation_scores es
+      WHERE es.evaluation_id = pe.id AND es.criterion_id = rc.id
+  );
+
+INSERT INTO evaluation_scores (evaluation_id, criterion_id, score, note, created_at)
+SELECT
+    pe.id,
+    rc.id,
+    CASE rc.criterion_key
+        WHEN 'problem_analysis' THEN 18.00
+        WHEN 'method_design' THEN 18.00
+        WHEN 'implementation_quality' THEN 23.00
+        WHEN 'documentation_presentation' THEN 14.00
+        WHEN 'impact_and_improvement' THEN 18.00
+        ELSE 0.00
+    END,
+    NULL,
+    NOW()
+FROM project_evaluations pe
+JOIN projects p ON p.id = pe.project_id
+JOIN rubric_criteria rc ON rc.is_active = 1
+WHERE p.name = 'Student Health Monitoring Platform'
+  AND pe.evaluation_round = 1
+  AND NOT EXISTS (
+      SELECT 1
+      FROM evaluation_scores es
+      WHERE es.evaluation_id = pe.id AND es.criterion_id = rc.id
+  );
+
+-- 10) Notifications and audit logs examples
+INSERT INTO notifications (user_id, title, message, type, related_project_id, is_read, created_at)
+SELECT
+    su.id,
+    'Project Evaluation Round 1',
+    'Your project has been evaluated. Please review the rubric summary.',
+    'info',
+    p.id,
+    0,
+    NOW()
+FROM users su
+JOIN projects p ON p.name = 'Smart Library Queue System'
+WHERE su.email = 'student.one@rmutp.ac.th'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM notifications n
+      WHERE n.user_id = su.id
+        AND n.title = 'Project Evaluation Round 1'
+        AND n.related_project_id = p.id
+  );
+
+INSERT INTO audit_logs (actor_id, action_key, action_detail, target_type, target_id, ip_address, created_at)
+SELECT
+    te.id,
+    'project.evaluation.create',
+    'Demo seed: created evaluation round 1',
+    'project',
+    p.id,
+    '127.0.0.1',
+    NOW()
+FROM users te
+JOIN projects p ON p.name = 'Smart Library Queue System'
+WHERE te.email = 'teacher.one@rmutp.ac.th'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM audit_logs al
+      WHERE al.actor_id = te.id
+        AND al.action_key = 'project.evaluation.create'
+        AND al.target_type = 'project'
+        AND al.target_id = p.id
+  );
+
+-- 11) Proposal lifecycle demo
+INSERT INTO proposals (
+    project_id, submitted_by, current_version_no, status, program_code, semester_label,
+    title, objective, summary, submitted_at, created_at, updated_at
+)
+SELECT
+    p.id, p.student_id, 1, 'submitted', 'GENERIC-BIT', '1/2569',
+    CONCAT('Proposal: ', p.name),
+    'Deliver a complete lifecycle workflow for project governance.',
+    'Initial proposal submitted by student leader for advisor review.',
+    NOW(), NOW(), NOW()
+FROM projects p
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM proposals pr
+      WHERE pr.project_id = p.id
+  );
+
+INSERT INTO proposal_versions (
+    proposal_id, version_no, title, objective, summary, status_snapshot, changed_by, created_at
+)
+SELECT
+    pr.id, 1, pr.title, pr.objective, pr.summary, pr.status, pr.submitted_by, NOW()
+FROM proposals pr
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM proposal_versions pv
+    WHERE pv.proposal_id = pr.id AND pv.version_no = 1
+);
+
+INSERT INTO proposal_committees (proposal_id, quorum_min, status, created_by, created_at, updated_at)
+SELECT pr.id, 2, 'active', pr.submitted_by, NOW(), NOW()
+FROM proposals pr
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM proposal_committees pc
+    WHERE pc.proposal_id = pr.id
+);
+
+INSERT INTO proposal_committee_members (committee_id, user_id, role_key, can_vote, created_at)
+SELECT pc.id, u.id, seed.role_key, 1, NOW()
+FROM proposal_committees pc
+JOIN proposals pr ON pr.id = pc.proposal_id
+JOIN projects p ON p.id = pr.project_id
+JOIN (
+    SELECT 'advisor' AS role_key, 'teacher.one@rmutp.ac.th' AS email
+    UNION ALL SELECT 'chair', 'teacher.two@rmutp.ac.th'
+) seed
+JOIN users u ON u.email = seed.email
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM proposal_committee_members pcm
+      WHERE pcm.committee_id = pc.id AND pcm.user_id = u.id
+  );
+
+INSERT INTO proposal_reviews (proposal_id, reviewer_id, action_key, note, created_at)
+SELECT pr.id, u.id, 'comment', 'Please refine measurable KPIs before approval.', NOW()
+FROM proposals pr
+JOIN projects p ON p.id = pr.project_id
+JOIN users u ON u.email = 'teacher.one@rmutp.ac.th'
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM proposal_reviews rv
+      WHERE rv.proposal_id = pr.id
+        AND rv.reviewer_id = u.id
+        AND rv.action_key = 'comment'
+  );
+
+-- 12) Milestone lifecycle demo
+INSERT INTO project_milestones (
+    project_id, template_item_id, title, description, due_date, weight_percent,
+    status, locked_by_policy, lock_until, created_by, created_at, updated_at
+)
+SELECT
+    p.id,
+    mti.id,
+    mti.title,
+    CONCAT('Auto-generated from template ', mt.template_name),
+    DATE_ADD(DATE(p.created_at), INTERVAL mti.default_due_offset_days DAY),
+    mti.weight_percent,
+    CASE WHEN mti.sequence_no = 1 THEN 'done' ELSE 'pending' END,
+    mti.lock_before_submission,
+    CASE WHEN mti.lock_before_submission = 1 THEN DATE_ADD(NOW(), INTERVAL 30 DAY) ELSE NULL END,
+    p.student_id,
+    NOW(),
+    NOW()
+FROM projects p
+JOIN proposals pr ON pr.project_id = p.id
+JOIN milestone_templates mt ON mt.program_code = pr.program_code AND mt.template_name = 'Default Project Lifecycle'
+JOIN milestone_template_items mti ON mti.template_id = mt.id
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM project_milestones pm
+      WHERE pm.project_id = p.id AND pm.title = mti.title
+  );
+
+INSERT INTO milestone_progress_logs (milestone_id, action_key, before_status, after_status, note, action_by, created_at)
+SELECT pm.id, 'created', NULL, pm.status, 'Seeded from lifecycle template', pm.created_by, NOW()
+FROM project_milestones pm
+JOIN projects p ON p.id = pm.project_id
+WHERE p.name = 'Smart Library Queue System'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM milestone_progress_logs mpl
+      WHERE mpl.milestone_id = pm.id AND mpl.action_key = 'created'
+  );
 

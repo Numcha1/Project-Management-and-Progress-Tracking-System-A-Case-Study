@@ -1,9 +1,32 @@
-<?php
+﻿<?php
+
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
     header('Content-Type: text/plain; charset=UTF-8');
     echo 'Forbidden: buildAdmin can only run from CLI';
-    exit;
+    exit(1);
+}
+
+require_once __DIR__ . '/../System/tenant_helpers.php';
+
+$options = getopt('', ['email::', 'password::', 'name::', 'faculty::']);
+$facultyCode = tenantNormalizeCode((string)($options['faculty'] ?? ''));
+
+if ($facultyCode !== '') {
+    try {
+        tenantEnsureCoreDatabaseExists();
+        $coreConn = tenantCoreConnection();
+        tenantEnsureCoreTables($coreConn);
+        $tenantDbName = tenantResolveDbNameByCode($coreConn, $facultyCode);
+        if ($tenantDbName === null) {
+            fwrite(STDERR, 'Invalid faculty code for tenant db: ' . $facultyCode . PHP_EOL);
+            exit(1);
+        }
+        putenv('DB_NAME=' . $tenantDbName);
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'Cannot resolve tenant by faculty: ' . $e->getMessage() . PHP_EOL);
+        exit(1);
+    }
 }
 
 require_once __DIR__ . '/../System/db_connect.php';
@@ -11,8 +34,6 @@ require_once __DIR__ . '/../System/app_helpers.php';
 
 $messages = [];
 $status = 'error';
-
-$options = getopt('', ['email::', 'password::', 'name::']);
 $fullname = trim((string)($options['name'] ?? getenv('ADMIN_FULLNAME') ?: 'Super Admin'));
 $email = trim((string)($options['email'] ?? getenv('ADMIN_EMAIL') ?: 'admin@rmutp.ac.th'));
 $password = trim((string)($options['password'] ?? getenv('ADMIN_PASSWORD') ?: ''));
@@ -20,7 +41,7 @@ $role = 'admin';
 $studentCode = null;
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    fwrite(STDERR, "Invalid admin email: {$email}" . PHP_EOL);
+    fwrite(STDERR, 'Invalid admin email: ' . $email . PHP_EOL);
     exit(1);
 }
 
@@ -71,4 +92,8 @@ foreach ($messages as $line) {
 echo 'Email: ' . $email . PHP_EOL;
 echo 'Password: ' . $password . PHP_EOL;
 echo 'Role: ' . $role . PHP_EOL;
+if ($facultyCode !== '') {
+    echo 'Faculty tenant: ' . $facultyCode . PHP_EOL;
+}
 exit($status === 'error' ? 1 : 0);
+

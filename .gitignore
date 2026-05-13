@@ -4,6 +4,8 @@ backup_before_frontend_backend_split_*/
 
 # Runtime/storage
 backend/storage/uploads/
+backend/storage/backups/*
+!backend/storage/backups/.gitkeep
 frontend/public/uploads/*
 !frontend/public/uploads/.gitkeep
 

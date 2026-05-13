@@ -203,6 +203,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     exit;
 }
 
+$auto_backup_summary = [
+    'status' => 'skipped',
+    'backup' => null,
+];
+if (hasAdminPermission($admin_permissions, 'can_backup_restore')) {
+    try {
+        $auto_backup_summary = maybeRunAutomaticDatabaseBackup($conn, (int)$current_user_id);
+    } catch (Throwable $e) {
+        $auto_backup_summary = [
+            'status' => 'error',
+            'backup' => null,
+        ];
+    }
+}
+
 // --- QUERY: ดึงประกาศปัจจุบัน ---
 $current_announcement = $conn->query("SELECT message FROM announcements LIMIT 1")->fetchColumn();
 if (!$current_announcement) $current_announcement = "";
@@ -214,6 +229,8 @@ $count_teachers = $conn->query("SELECT COUNT(*) FROM users WHERE role='teacher'"
 $count_projects = $conn->query("SELECT COUNT(*) FROM projects")->fetchColumn();
 $count_completed = $conn->query("SELECT COUNT(*) FROM projects WHERE progress=100")->fetchColumn();
 $count_ongoing = $count_projects - $count_completed;
+$count_pending_reviews = $conn->query("SELECT COUNT(*) FROM tasks WHERE status = 'done' AND teacher_status = 'pending'")->fetchColumn();
+$count_overdue_tasks = $conn->query("SELECT COUNT(*) FROM tasks WHERE due_date IS NOT NULL AND due_date <> '0000-00-00' AND due_date < CURDATE() AND status <> 'done'")->fetchColumn();
 
 // --- QUERY: ค้นหาและกรองผู้ใช้ ---
 $search = trim($_GET['search'] ?? '');
@@ -311,10 +328,12 @@ while ($row = $settings_result->fetch()) {
 <html lang="th">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ผู้ดูแลระบบ - RMUTP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="assets/js/rmutp-ui.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap');
         body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
@@ -352,14 +371,48 @@ while ($row = $settings_result->fetch()) {
                     <a href="admin_reports.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition text-sm font-bold">
                         <i class="fas fa-file-export mr-2"></i> รายงานและส่งออก CSV
                     </a>
+                    <a href="admin_kpi.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition text-sm font-bold">
+                        <i class="fas fa-chart-line mr-2"></i> แดชบอร์ด KPI
+                    </a>
                     <?php if (hasAdminPermission($admin_permissions, 'can_view_audit')): ?>
                     <a href="admin_audit_logs.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-800 transition text-sm font-bold">
                         <i class="fas fa-clipboard-list mr-2"></i> ประวัติการใช้งาน
                     </a>
                     <?php endif; ?>
+                    <a href="approval_center.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-700 text-white hover:bg-indigo-800 transition text-sm font-bold">
+                        <i class="fas fa-route mr-2"></i> ศูนย์อนุมัติโครงงาน
+                    </a>
+                    <a href="proposal_center.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition text-sm font-bold">
+                        <i class="fas fa-file-signature mr-2"></i> ศูนย์ข้อเสนอโครงงาน
+                    </a>
+                    <a href="committee_assignment.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 transition text-sm font-bold">
+                        <i class="fas fa-users mr-2"></i> จัดสรรกรรมการ
+                    </a>
+                    <a href="tenant_admin.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition text-sm font-bold">
+                        <i class="fas fa-building mr-2"></i> ผู้ดูแลเทนเนนต์
+                    </a>
+                    <a href="admin_ops.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-violet-700 text-white hover:bg-violet-800 transition text-sm font-bold">
+                        <i class="fas fa-server mr-2"></i> ศูนย์ปฏิบัติการระบบ
+                    </a>
+                    <?php if (hasAdminPermission($admin_permissions, 'can_backup_restore')): ?>
+                    <a href="admin_backups.php" class="inline-flex items-center px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition text-sm font-bold">
+                        <i class="fas fa-database mr-2"></i> สำรองฐานข้อมูล
+                    </a>
+                    <?php endif; ?>
                 </div>
             </div>
 
+            
+            <?php if (($auto_backup_summary['status'] ?? '') === 'created'): ?>
+            <div class="card p-4 mb-6 border-l-4 border-emerald-500 bg-emerald-50 text-emerald-700 text-sm">
+                สร้างไฟล์สำรองฐานข้อมูลอัตโนมัติเรียบร้อย:
+                <span class="font-semibold"><?= htmlspecialchars((string)($auto_backup_summary['backup']['file_name'] ?? '-')) ?></span>
+            </div>
+            <?php elseif (($auto_backup_summary['status'] ?? '') === 'error'): ?>
+            <div class="card p-4 mb-6 border-l-4 border-rose-500 bg-rose-50 text-rose-700 text-sm">
+                ระบบสำรองฐานข้อมูลอัตโนมัติเกิดข้อผิดพลาด กรุณาตรวจสอบหน้าสำรองฐานข้อมูล
+            </div>
+            <?php endif; ?>
             <!-- กล่องจัดการประกาศข่าวสาร (ใหม่) -->
             <div class="card p-6 border-l-4 border-yellow-500 mb-8 bg-yellow-50">
                 <form method="POST">
@@ -380,12 +433,12 @@ while ($row = $settings_result->fetch()) {
             </div>
             
             <!-- สถิติ (Statistics) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
                 <div class="card p-5 border-l-4 border-blue-500 hover:shadow-lg transition">
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-gray-500 text-sm font-bold">ผู้ใช้งานทั้งหมด</div>
-                            <div class="text-2xl font-bold text-gray-800 mt-1"><?= $count_users ?> <span class="text-sm font-normal text-gray-500">บัญชี</span></div>
+                            <div class="text-2xl font-bold text-gray-800 mt-1"><span data-rt-admin-users><?= (int)$count_users ?></span> <span class="text-sm font-normal text-gray-500">บัญชี</span></div>
                         </div>
                         <div class="text-blue-200 text-4xl"><i class="fas fa-users"></i></div>
                     </div>
@@ -394,7 +447,7 @@ while ($row = $settings_result->fetch()) {
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-gray-500 text-sm font-bold">นักศึกษา / อาจารย์</div>
-                            <div class="text-2xl font-bold text-gray-800 mt-1"><?= $count_students ?> <span class="text-sm font-normal text-gray-400">/ <?= $count_teachers ?></span></div>
+                            <div class="text-2xl font-bold text-gray-800 mt-1"><span data-rt-admin-students><?= (int)$count_students ?></span> <span class="text-sm font-normal text-gray-400">/ <span data-rt-admin-teachers><?= (int)$count_teachers ?></span></span></div>
                         </div>
                         <div class="text-indigo-200 text-4xl"><i class="fas fa-user-graduate"></i></div>
                     </div>
@@ -403,7 +456,7 @@ while ($row = $settings_result->fetch()) {
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-gray-500 text-sm font-bold">โครงงานทั้งหมด</div>
-                            <div class="text-2xl font-bold text-gray-800 mt-1"><?= $count_projects ?> <span class="text-sm font-normal text-gray-500">งาน</span></div>
+                            <div class="text-2xl font-bold text-gray-800 mt-1"><span data-rt-admin-projects><?= (int)$count_projects ?></span> <span class="text-sm font-normal text-gray-500">งาน</span></div>
                         </div>
                         <div class="text-purple-200 text-4xl"><i class="fas fa-project-diagram"></i></div>
                     </div>
@@ -412,9 +465,27 @@ while ($row = $settings_result->fetch()) {
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-gray-500 text-sm font-bold">โครงงานสมบูรณ์แล้ว</div>
-                            <div class="text-2xl font-bold text-gray-800 mt-1"><?= $count_completed ?> <span class="text-sm font-normal text-gray-400">/ ทำอยู่ <?= $count_ongoing ?></span></div>
+                            <div class="text-2xl font-bold text-gray-800 mt-1"><span data-rt-admin-completed><?= (int)$count_completed ?></span> <span class="text-sm font-normal text-gray-400">/ ทำอยู่ <span data-rt-admin-ongoing><?= (int)$count_ongoing ?></span></span></div>
                         </div>
                         <div class="text-green-200 text-4xl"><i class="fas fa-check-circle"></i></div>
+                    </div>
+                </div>
+                <div class="card p-5 border-l-4 border-amber-500 hover:shadow-lg transition">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-gray-500 text-sm font-bold">งานรอตรวจ</div>
+                            <div class="text-2xl font-bold text-gray-800 mt-1"><span data-rt-admin-pending-reviews><?= (int)$count_pending_reviews ?></span> <span class="text-sm font-normal text-gray-500">รายการ</span></div>
+                        </div>
+                        <div class="text-amber-200 text-4xl"><i class="fas fa-hourglass-half"></i></div>
+                    </div>
+                </div>
+                <div class="card p-5 border-l-4 border-rose-500 hover:shadow-lg transition">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-gray-500 text-sm font-bold">งานเลยกำหนด</div>
+                            <div class="text-2xl font-bold text-gray-800 mt-1"><span data-rt-admin-overdue><?= (int)$count_overdue_tasks ?></span> <span class="text-sm font-normal text-gray-500">รายการ</span></div>
+                        </div>
+                        <div class="text-rose-200 text-4xl"><i class="fas fa-triangle-exclamation"></i></div>
                     </div>
                 </div>
             </div>
@@ -908,118 +979,121 @@ while ($row = $settings_result->fetch()) {
         <input type="hidden" name="delete_project_id" id="delete_project_id">
     </form>
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const status = urlParams.get('status');
-        
-        if (status === 'edited') {
-            Swal.fire({icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'deleted') {
-            Swal.fire({icon: 'success', title: 'ลบผู้ใช้เรียบร้อย', showConfirmButton: false, timer: 1500})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'error_self') {
-            Swal.fire({icon: 'error', title: 'ไม่อนุญาต', text: 'คุณไม่สามารถลบบัญชีของตัวเองได้!', confirmButtonText: 'ตกลง'})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'csrf_invalid') {
-            Swal.fire({icon: 'error', title: 'คำขอไม่ถูกต้อง', text: 'กรุณาลองใหม่อีกครั้ง', confirmButtonText: 'ตกลง'})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'permission_denied') {
-            Swal.fire({icon: 'error', title: 'ไม่มีสิทธิ์ใช้งาน', text: 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้', confirmButtonText: 'ตกลง'})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'announced') {
-            Swal.fire({icon: 'success', title: 'อัปเดตประกาศสำเร็จ', text: 'นักศึกษาและอาจารย์จะเห็นประกาศนี้ทันที', showConfirmButton: false, timer: 2000})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'project_edited') {
-            Swal.fire({icon: 'success', title: 'อัปเดตโครงงานสำเร็จ', showConfirmButton: false, timer: 1500})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'project_deleted') {
-            Swal.fire({icon: 'success', title: 'ลบโครงงานเรียบร้อย', showConfirmButton: false, timer: 1500})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'user_added') {
-            Swal.fire({icon: 'success', title: 'เพิ่มผู้ใช้สำเร็จ', showConfirmButton: false, timer: 1500})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'email_exists') {
-            Swal.fire({icon: 'error', title: 'อีเมลซ้ำ', text: 'อีเมลนี้มีผู้ใช้งานแล้ว!', confirmButtonText: 'ตกลง'})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'student_code_exists') {
-            Swal.fire({icon: 'error', title: 'รหัสนักศึกษาซ้ำ', text: 'รหัสนักศึกษานี้ถูกใช้ไปแล้ว กรุณาตรวจสอบใหม่', confirmButtonText: 'ตกลง'})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        } else if (status === 'settings_saved') {
-            Swal.fire({icon: 'success', title: 'บันทึกการตั้งค่าเรียบร้อย', text: 'การตั้งค่าระบบได้รับการอัปเดตแล้ว', showConfirmButton: false, timer: 2000})
-                .then(() => window.history.replaceState(null, null, window.location.pathname));
-        }
+        window.RMUTP.showStatusFromQuery({
+            edited: { icon: 'success', title: 'อัปเดตข้อมูลสำเร็จ', showConfirmButton: false, timer: 1500 },
+            deleted: { icon: 'success', title: 'ลบผู้ใช้เรียบร้อย', showConfirmButton: false, timer: 1500 },
+            error_self: { icon: 'error', title: 'ไม่อนุญาต', text: 'คุณไม่สามารถลบบัญชีของตัวเองได้!', confirmButtonText: 'ตกลง' },
+            csrf_invalid: { icon: 'error', title: 'คำขอไม่ถูกต้อง', text: 'กรุณาลองใหม่อีกครั้ง', confirmButtonText: 'ตกลง' },
+            permission_denied: { icon: 'error', title: 'ไม่มีสิทธิ์ใช้งาน', text: 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้', confirmButtonText: 'ตกลง' },
+            announced: { icon: 'success', title: 'อัปเดตประกาศสำเร็จ', text: 'นักศึกษาและอาจารย์จะเห็นประกาศนี้ทันที', showConfirmButton: false, timer: 2000 },
+            project_edited: { icon: 'success', title: 'อัปเดตโครงงานสำเร็จ', showConfirmButton: false, timer: 1500 },
+            project_deleted: { icon: 'success', title: 'ลบโครงงานเรียบร้อย', showConfirmButton: false, timer: 1500 },
+            user_added: { icon: 'success', title: 'เพิ่มผู้ใช้สำเร็จ', showConfirmButton: false, timer: 1500 },
+            email_exists: { icon: 'error', title: 'อีเมลซ้ำ', text: 'อีเมลนี้มีผู้ใช้งานแล้ว!', confirmButtonText: 'ตกลง' },
+            student_code_exists: { icon: 'error', title: 'รหัสนักศึกษาซ้ำ', text: 'รหัสนักศึกษานี้ถูกใช้ไปแล้ว กรุณาตรวจสอบใหม่', confirmButtonText: 'ตกลง' },
+            settings_saved: { icon: 'success', title: 'บันทึกการตั้งค่าเรียบร้อย', text: 'การตั้งค่าระบบได้รับการอัปเดตแล้ว', showConfirmButton: false, timer: 2000 }
+        });
+
+        const applyRealtimeAdmin = function (data) {
+            const counters = data && data.counters ? data.counters : {};
+            window.RMUTP.updateTextMany('[data-rt-admin-users]', Number(counters.users ?? 0));
+            window.RMUTP.updateTextMany('[data-rt-admin-students]', Number(counters.students ?? 0));
+            window.RMUTP.updateTextMany('[data-rt-admin-teachers]', Number(counters.teachers ?? 0));
+            window.RMUTP.updateTextMany('[data-rt-admin-projects]', Number(counters.projects ?? 0));
+            window.RMUTP.updateTextMany('[data-rt-admin-completed]', Number(counters.completed_projects ?? 0));
+            window.RMUTP.updateTextMany('[data-rt-admin-ongoing]', Number(counters.ongoing_projects ?? 0));
+            window.RMUTP.updateTextMany('[data-rt-admin-pending-reviews]', Number(counters.pending_reviews ?? 0));
+            window.RMUTP.updateTextMany('[data-rt-admin-overdue]', Number(counters.overdue_tasks ?? 0));
+        };
+
+        const stopRealtime = window.RMUTP.startRealtimePoller({
+            scope: 'admin',
+            intervalMs: 12000,
+            onData: applyRealtimeAdmin
+        });
+        window.addEventListener('beforeunload', stopRealtime);
 
         const currentUserId = <?= $current_user_id ?>;
         const deleteUserForm = document.getElementById('delete-user-form');
         const deleteUserInput = document.getElementById('delete_user_id');
         const deleteProjectForm = document.getElementById('delete-project-form');
         const deleteProjectInput = document.getElementById('delete_project_id');
-        function openAddUserModal() {
-            document.getElementById('modal-add-user').classList.remove('hidden');
-        }
 
-        function closeAddUserModal() { document.getElementById('modal-add-user').classList.add('hidden'); }
-        function openEditModal(id, fullname, studentCode, email, role) {
+        window.openAddUserModal = function () {
+            document.getElementById('modal-add-user').classList.remove('hidden');
+        };
+
+        window.closeAddUserModal = function () {
+            document.getElementById('modal-add-user').classList.add('hidden');
+        };
+
+        window.openEditModal = function (id, fullname, studentCode, email, role) {
             document.getElementById('edit_id').value = id;
             document.getElementById('edit_fullname').value = fullname;
             document.getElementById('edit_student_code').value = studentCode;
             document.getElementById('edit_email').value = email;
             document.getElementById('edit_role').value = role;
-            
+
             if (id === currentUserId) {
                 document.getElementById('admin_warning').classList.remove('hidden');
             } else {
                 document.getElementById('admin_warning').classList.add('hidden');
             }
             document.getElementById('modal-edit').classList.remove('hidden');
-        }
+        };
 
-        function closeEditModal() { document.getElementById('modal-edit').classList.add('hidden'); }
+        window.closeEditModal = function () {
+            document.getElementById('modal-edit').classList.add('hidden');
+        };
 
-        function confirmDelete(userId) {
-            Swal.fire({
+        window.confirmDelete = function (userId) {
+            window.RMUTP.confirmAction({
                 title: 'ยืนยันการลบ?',
-                text: "ลบผู้ใช้นี้แล้วจะไม่สามารถกู้คืนได้!",
+                text: 'ลบผู้ใช้นี้แล้วจะไม่สามารถกู้คืนได้!',
                 icon: 'warning',
-                showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#6b7280',
                 confirmButtonText: 'ใช่, ลบเลย!',
                 cancelButtonText: 'ยกเลิก'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    deleteUserInput.value = userId;
-                    deleteUserForm.submit();
-                }
+            }, function () {
+                deleteUserInput.value = userId;
+                window.RMUTP.setLoader(true, 'กำลังลบผู้ใช้...');
+                deleteUserForm.submit();
             });
-        }
+        };
 
-        function openProjectModal(id, name, description) {
+        window.openProjectModal = function (id, name, description) {
             document.getElementById('project_id').value = id;
             document.getElementById('project_name').value = name;
             document.getElementById('project_description').value = description;
             document.getElementById('modal-project').classList.remove('hidden');
-        }
+        };
 
-        function closeProjectModal() { document.getElementById('modal-project').classList.add('hidden'); }
+        window.closeProjectModal = function () {
+            document.getElementById('modal-project').classList.add('hidden');
+        };
 
-        function confirmDeleteProject(projectId) {
-            Swal.fire({
+        window.confirmDeleteProject = function (projectId) {
+            window.RMUTP.confirmAction({
                 title: 'ยืนยันการลบโครงงาน?',
-                text: "ลบโครงงานนี้แล้วจะไม่สามารถกู้คืนได้ รวมถึงงานย่อยทั้งหมด!",
+                text: 'ลบโครงงานนี้แล้วจะไม่สามารถกู้คืนได้ รวมถึงงานย่อยทั้งหมด!',
                 icon: 'warning',
-                showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#6b7280',
                 confirmButtonText: 'ใช่, ลบเลย!',
                 cancelButtonText: 'ยกเลิก'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    deleteProjectInput.value = projectId;
-                    deleteProjectForm.submit();
-                }
+            }, function () {
+                deleteProjectInput.value = projectId;
+                window.RMUTP.setLoader(true, 'กำลังลบโครงงาน...');
+                deleteProjectForm.submit();
             });
-        }
+        };
+
+        window.RMUTP.attachFormSubmitGuard();
     </script>
 </body>
 </html>
+
+
+
+

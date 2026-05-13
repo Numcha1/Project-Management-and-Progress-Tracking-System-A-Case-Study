@@ -172,10 +172,12 @@ $completed_projects = $stmt_search->fetchAll();
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>Student Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แดชบอร์ดนักศึกษา</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="assets/js/rmutp-ui.js"></script>
     <style>@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap'); body{font-family:'Sarabun',sans-serif;}</style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -186,8 +188,20 @@ $completed_projects = $stmt_search->fetchAll();
         <div class="font-bold text-xl">RMUTP Project</div>
         <div class="flex items-center gap-3">
             <span><?= htmlspecialchars($_SESSION['fullname']) ?></span>
+            <a href="approval_center.php" class="bg-indigo-500 text-white px-3 py-1 rounded text-sm hover:bg-indigo-600 font-bold transition">
+                <i class="fas fa-route"></i> ศูนย์อนุมัติ
+            </a>
+            <a href="proposal_center.php" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 font-bold transition">
+                <i class="fas fa-file-signature"></i> ศูนย์ข้อเสนอโครงงาน
+            </a>
+            <a href="milestone_board.php" class="bg-cyan-600 text-white px-3 py-1 rounded text-sm hover:bg-cyan-700 font-bold transition">
+                <i class="fas fa-flag-checkered"></i> กระดานไมล์สโตน
+            </a>
+            <a href="committee_assignment.php" class="bg-slate-700 text-white px-3 py-1 rounded text-sm hover:bg-slate-800 font-bold transition">
+                <i class="fas fa-users"></i> กรรมการ
+            </a>
             <a href="edit_profile.php" class="bg-white text-purple-800 px-3 py-1 rounded text-sm hover:bg-gray-100 font-bold transition"><i class="fas fa-user-cog"></i> แก้ไขส่วนตัว</a>
-            <a href="logout.php" class="bg-yellow-500 text-black px-3 py-1 rounded text-sm hover:bg-yellow-400 transition">Logout</a>
+            <a href="logout.php" class="bg-yellow-500 text-black px-3 py-1 rounded text-sm hover:bg-yellow-400 transition">ออกจากระบบ</a>
         </div>
     </nav>
 
@@ -229,7 +243,7 @@ $completed_projects = $stmt_search->fetchAll();
                     </div>
                     <div class="flex gap-2">
                         <a href="?respond_invite=accept&invite_id=<?= $invite['invite_id'] ?>" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">รับ</a>
-                        <a href="?respond_invite=decline&invite_id=<?= $invite['invite_id'] ?>" onclick="return confirm('ปฏิเสธ?')" class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600">ปฏิเสธ</a>
+                        <a href="#" onclick="confirmInviteDecline(event, <?= (int)$invite['invite_id'] ?>)" class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600">ปฏิเสธ</a>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -252,7 +266,7 @@ $completed_projects = $stmt_search->fetchAll();
                 ?>
                 <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-purple-800 relative hover:shadow-xl transition">
                     <div class="absolute top-4 right-4 bg-<?= $p['role']=='leader'?'yellow':'blue' ?>-100 text-<?= $p['role']=='leader'?'yellow':'blue' ?>-800 px-2 py-1 rounded-full text-xs font-bold">
-                        <?= $p['role']=='leader'?'<i class="fas fa-crown"></i> Leader':'<i class="fas fa-user"></i> Member' ?>
+                        <?= $p['role']=='leader'?'<i class="fas fa-crown"></i> หัวหน้าทีม':'<i class="fas fa-user"></i> สมาชิก' ?>
                     </div>
                     <h4 class="font-bold text-lg text-gray-800"><?= htmlspecialchars($p['name']) ?></h4>
                     <p class="text-gray-600 text-sm mt-1">กรณีศึกษา: <?= htmlspecialchars($p['case_study']) ?></p>
@@ -274,7 +288,7 @@ $completed_projects = $stmt_search->fetchAll();
 
                 <?php if(count($my_projs) > 1): ?>
                 <button onclick="document.getElementById('modal-my-projects').classList.remove('hidden')" class="w-full text-center text-sm text-purple-700 hover:text-purple-900 font-bold mt-2 bg-purple-50 p-2 rounded hover:bg-purple-100 transition border border-purple-100">
-                    ดูโครงงานทั้งหมด (<?= count($my_projs) ?>) <i class="fas fa-list"></i>
+                    ดูโครงงานทั้งหมด (<span data-rt-student-my-projects><?= (int)count($my_projs) ?></span>) <i class="fas fa-list"></i>
                 </button>
                 <?php endif; ?>
 
@@ -288,7 +302,7 @@ $completed_projects = $stmt_search->fetchAll();
         <div class="space-y-3">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="font-bold text-lg text-gray-700"><i class="fas fa-tasks mr-2"></i> งานที่ต้องส่ง</h3>
-                <span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-bold"><?= $total_pending_tasks ?> งานค้าง</span>
+                <span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-bold"><span data-rt-student-pending-tasks><?= (int)$total_pending_tasks ?></span> งานค้าง</span>
             </div>
             
             <?php if($total_pending_tasks > 0): ?>
@@ -343,7 +357,7 @@ $completed_projects = $stmt_search->fetchAll();
 
                 <?php if($total_pending_tasks > 2): ?>
                 <button onclick="document.getElementById('modal-all-tasks').classList.remove('hidden')" class="w-full text-center text-sm text-purple-700 hover:text-purple-900 font-bold mt-2 bg-purple-50 p-2 rounded hover:bg-purple-100 transition">
-                    ดูงานที่เหลือทั้งหมด (<?= $total_pending_tasks ?>) <i class="fas fa-list"></i>
+                    ดูงานที่เหลือทั้งหมด (<span data-rt-student-pending-tasks><?= (int)$total_pending_tasks ?></span>) <i class="fas fa-list"></i>
                 </button>
                 <?php endif; ?>
 
@@ -459,7 +473,7 @@ $completed_projects = $stmt_search->fetchAll();
                 <?php foreach($my_projs as $p): ?>
                 <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-purple-800 relative hover:shadow-xl transition">
                     <div class="absolute top-4 right-4 bg-<?= $p['role']=='leader'?'yellow':'blue' ?>-100 text-<?= $p['role']=='leader'?'yellow':'blue' ?>-800 px-2 py-1 rounded-full text-xs font-bold">
-                        <?= $p['role']=='leader'?'<i class="fas fa-crown"></i> Leader':'<i class="fas fa-user"></i> Member' ?>
+                        <?= $p['role']=='leader'?'<i class="fas fa-crown"></i> หัวหน้าทีม':'<i class="fas fa-user"></i> สมาชิก' ?>
                     </div>
                     <h4 class="font-bold text-lg text-gray-800"><?= htmlspecialchars($p['name']) ?></h4>
                     <p class="text-gray-600 text-sm mt-1">กรณีศึกษา: <?= htmlspecialchars($p['case_study']) ?></p>
@@ -486,7 +500,7 @@ $completed_projects = $stmt_search->fetchAll();
 <div id="modal-all-tasks" class="fixed inset-0 bg-black bg-opacity-60 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg w-full max-w-3xl shadow-2xl h-[80vh] flex flex-col">
         <div class="p-4 border-b flex justify-between items-center bg-purple-800 text-white rounded-t-lg">
-            <h3 class="font-bold text-lg"><i class="fas fa-tasks mr-2"></i> งานที่ต้องส่งทั้งหมด (<?= $total_pending_tasks ?>)</h3>
+            <h3 class="font-bold text-lg"><i class="fas fa-tasks mr-2"></i> งานที่ต้องส่งทั้งหมด (<span data-rt-student-pending-tasks><?= (int)$total_pending_tasks ?></span>)</h3>
             <button onclick="document.getElementById('modal-all-tasks').classList.add('hidden')" class="text-white hover:text-gray-300 text-xl font-bold">&times;</button>
         </div>
         
@@ -597,57 +611,79 @@ $completed_projects = $stmt_search->fetchAll();
 </div>
 
 <script>
-    function openFile(path) { document.getElementById('file-viewer').src=path; document.getElementById('modal-file').classList.remove('hidden'); }
-    const urlParams = new URLSearchParams(window.location.search);
-    const status = urlParams.get('status');
-    const cleanUrl = () => window.history.replaceState(null, null, window.location.pathname);
+    window.openFile = function (path) {
+        window.RMUTP.openFilePreview(path);
+    };
 
-    if (status === 'created') Swal.fire({icon: 'success', title: 'สร้างโครงงานสำเร็จ', showConfirmButton: false, timer: 1500}).then(cleanUrl);
-    else if (status === 'duplicate') Swal.fire({
-        icon: 'error', 
-        title: 'ข้อมูลซ้ำซ้อน!', 
-        text: 'มีโครงงานชื่อนี้และกรณีศึกษานี้อยู่ในระบบแล้ว กรุณาตรวจสอบหรือเปลี่ยนกรณีศึกษา',
-        confirmButtonText: 'ตกลง'
-    }).then(cleanUrl);
-    else if (status === 'joined') Swal.fire({icon: 'success', title: 'เข้าร่วมกลุ่มแล้ว', timer: 1500, showConfirmButton: false}).then(cleanUrl);
-    else if (status === 'deleted') Swal.fire({icon: 'success', title: 'ลบโครงงานเรียบร้อย', timer: 1500, showConfirmButton: false}).then(cleanUrl);
-    else if (status === 'left') Swal.fire({icon: 'success', title: 'ออกจากกลุ่มเรียบร้อย', timer: 1500, showConfirmButton: false}).then(cleanUrl);
+    window.RMUTP.showStatusFromQuery({
+        created: { icon: 'success', title: 'สร้างโครงงานสำเร็จ', showConfirmButton: false, timer: 1500 },
+        duplicate: {
+            icon: 'error',
+            title: 'ข้อมูลซ้ำซ้อน!',
+            text: 'มีโครงงานชื่อนี้และกรณีศึกษานี้อยู่ในระบบแล้ว กรุณาตรวจสอบหรือเปลี่ยนกรณีศึกษา',
+            confirmButtonText: 'ตกลง'
+        },
+        joined: { icon: 'success', title: 'เข้าร่วมกลุ่มแล้ว', timer: 1500, showConfirmButton: false },
+        deleted: { icon: 'success', title: 'ลบโครงงานเรียบร้อย', timer: 1500, showConfirmButton: false },
+        left: { icon: 'success', title: 'ออกจากกลุ่มเรียบร้อย', timer: 1500, showConfirmButton: false }
+    });
 
-    function confirmDelete(event, projectId) {
-        event.preventDefault();
-        Swal.fire({
+    const applyRealtimeStudent = function (data) {
+        const counters = data && data.counters ? data.counters : {};
+        window.RMUTP.updateTextMany('[data-rt-student-pending-tasks]', Number(counters.pending_tasks ?? 0));
+        window.RMUTP.updateTextMany('[data-rt-student-my-projects]', Number(counters.my_projects ?? 0));
+    };
+
+    const stopRealtime = window.RMUTP.startRealtimePoller({
+        scope: 'student',
+        intervalMs: 12000,
+        onData: applyRealtimeStudent
+    });
+
+    window.addEventListener('beforeunload', stopRealtime);
+    window.RMUTP.attachFormSubmitGuard();
+    window.RMUTP.attachActionLinkGuard('a[href*="respond_invite=accept"]', 'กำลังตอบรับคำเชิญ...');
+
+    window.confirmDelete = function (event, projectId) {
+        window.RMUTP.confirmAndNavigate(event, {
             title: 'ยืนยันลบโครงงาน?',
-            text: "การกระทำนี้จะลบข้อมูลทั้งหมดที่เกี่ยวข้องและไม่สามารถกู้คืนได้!",
+            text: 'การกระทำนี้จะลบข้อมูลทั้งหมดที่เกี่ยวข้องและไม่สามารถกู้คืนได้!',
             icon: 'warning',
-            showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#6b7280',
             confirmButtonText: 'ใช่, ลบเลย!',
-            cancelButtonText: 'ยกเลิก'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                window.location.href = '?delete_project=' + projectId;
-            }
+            cancelButtonText: 'ยกเลิก',
+            url: '?delete_project=' + projectId,
+            loadingText: 'กำลังลบโครงงาน...'
         });
-    }
+    };
 
-    function confirmLeave(event, projectId) {
-        event.preventDefault();
-        Swal.fire({
+    window.confirmLeave = function (event, projectId) {
+        window.RMUTP.confirmAndNavigate(event, {
             title: 'ยืนยันออกจากกลุ่มโครงงานนี้?',
-            text: "คุณจะถูกลบออกจากรายชื่อสมาชิกของโครงงานนี้",
+            text: 'คุณจะถูกลบออกจากรายชื่อสมาชิกของโครงงานนี้',
             icon: 'warning',
-            showCancelButton: true,
             confirmButtonColor: '#f97316',
             cancelButtonColor: '#6b7280',
             confirmButtonText: 'ใช่, ออกจากกลุ่ม!',
-            cancelButtonText: 'ยกเลิก'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                window.location.href = '?leave_project=' + projectId;
-            }
+            cancelButtonText: 'ยกเลิก',
+            url: '?leave_project=' + projectId,
+            loadingText: 'กำลังออกจากกลุ่ม...'
         });
-    }
+    };
+
+    window.confirmInviteDecline = function (event, inviteId) {
+        window.RMUTP.confirmAndNavigate(event, {
+            title: 'ยืนยันปฏิเสธคำเชิญ?',
+            icon: 'question',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'ปฏิเสธ',
+            cancelButtonText: 'ยกเลิก',
+            url: '?respond_invite=decline&invite_id=' + inviteId,
+            loadingText: 'กำลังอัปเดตคำเชิญ...'
+        });
+    };
 </script>
 </body>
 </html>

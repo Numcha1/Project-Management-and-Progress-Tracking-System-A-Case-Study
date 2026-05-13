@@ -1,6 +1,4 @@
-<?php
-
-declare(strict_types=1);
+﻿<?php
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
@@ -9,183 +7,147 @@ if (PHP_SAPI !== 'cli') {
     exit(1);
 }
 
-/**
- * @return list<string>
- */
-function splitSqlStatements(string $sql): array
-{
-    $statements = [];
-    $buffer = '';
-    $length = strlen($sql);
-    $inSingle = false;
-    $inDouble = false;
-    $inBacktick = false;
-    $inLineComment = false;
-    $inBlockComment = false;
-
-    for ($i = 0; $i < $length; $i++) {
-        $char = $sql[$i];
-        $next = $i + 1 < $length ? $sql[$i + 1] : '';
-        $prev = $i > 0 ? $sql[$i - 1] : '';
-
-        if ($inLineComment) {
-            if ($char === "\n") {
-                $inLineComment = false;
-            }
-            continue;
-        }
-
-        if ($inBlockComment) {
-            if ($char === '*' && $next === '/') {
-                $inBlockComment = false;
-                $i++;
-            }
-            continue;
-        }
-
-        if (!$inSingle && !$inDouble && !$inBacktick) {
-            if ($char === '-' && $next === '-') {
-                $inLineComment = true;
-                $i++;
-                continue;
-            }
-            if ($char === '#') {
-                $inLineComment = true;
-                continue;
-            }
-            if ($char === '/' && $next === '*') {
-                $inBlockComment = true;
-                $i++;
-                continue;
-            }
-        }
-
-        if ($char === "'" && !$inDouble && !$inBacktick) {
-            if ($inSingle && $next === "'") {
-                $buffer .= "''";
-                $i++;
-                continue;
-            }
-            if ($prev !== '\\') {
-                $inSingle = !$inSingle;
-            }
-            $buffer .= $char;
-            continue;
-        }
-
-        if ($char === '"' && !$inSingle && !$inBacktick) {
-            if ($inDouble && $next === '"') {
-                $buffer .= '""';
-                $i++;
-                continue;
-            }
-            if ($prev !== '\\') {
-                $inDouble = !$inDouble;
-            }
-            $buffer .= $char;
-            continue;
-        }
-
-        if ($char === '`' && !$inSingle && !$inDouble) {
-            $inBacktick = !$inBacktick;
-            $buffer .= $char;
-            continue;
-        }
-
-        if ($char === ';' && !$inSingle && !$inDouble && !$inBacktick) {
-            $statement = trim($buffer);
-            if ($statement !== '') {
-                $statements[] = $statement;
-            }
-            $buffer = '';
-            continue;
-        }
-
-        $buffer .= $char;
-    }
-
-    $statement = trim($buffer);
-    if ($statement !== '') {
-        $statements[] = $statement;
-    }
-
-    return $statements;
-}
-
-function quoteIdentifier(string $value): string
-{
-    return '`' . str_replace('`', '``', $value) . '`';
-}
-
-function applySqlFile(PDO $pdo, string $filePath, string $label): int
-{
-    if (!is_file($filePath)) {
-        throw new RuntimeException("Missing {$label} file: {$filePath}");
-    }
-
-    $rawSql = file_get_contents($filePath);
-    if ($rawSql === false) {
-        throw new RuntimeException("Unable to read {$label} file: {$filePath}");
-    }
-    if (strncmp($rawSql, "\xEF\xBB\xBF", 3) === 0) {
-        $rawSql = substr($rawSql, 3);
-    }
-
-    $statements = splitSqlStatements($rawSql);
-    $applied = 0;
-
-    foreach ($statements as $statement) {
-        $pdo->exec($statement);
-        $applied++;
-    }
-
-    return $applied;
-}
+require_once __DIR__ . '/../System/tenant_helpers.php';
 
 $options = getopt('', [
+    'mode::',
     'host::',
     'port::',
     'database::',
     'user::',
     'password::',
     'sql::',
+    'core-sql::',
+    'faculty::',
+    'faculty-name::',
+    'tenant-db::',
 ]);
 
 $projectRoot = dirname(__DIR__, 4);
-$host = (string)($options['host'] ?? getenv('DB_HOST') ?: '127.0.0.1');
-$port = (int)($options['port'] ?? getenv('DB_PORT') ?: 3306);
-$database = (string)($options['database'] ?? getenv('DB_NAME') ?: 'rmutp');
-$username = (string)($options['user'] ?? getenv('DB_USER') ?: 'root');
-$password = $options['password'] ?? getenv('DB_PASS');
-if ($password === false || $password === null) {
-    $password = '';
+$tenantSqlPath = (string)($options['sql'] ?? ($projectRoot . DIRECTORY_SEPARATOR . 'docs' . DIRECTORY_SEPARATOR . 'sql' . DIRECTORY_SEPARATOR . 'rmutp_database.sql'));
+$coreSqlPath = (string)($options['core-sql'] ?? ($projectRoot . DIRECTORY_SEPARATOR . 'docs' . DIRECTORY_SEPARATOR . 'sql' . DIRECTORY_SEPARATOR . 'rmutp_core_database.sql'));
+$mode = strtolower(trim((string)($options['mode'] ?? 'single')));
+if ($mode === '') {
+    $mode = 'single';
 }
-$sqlPath = (string)($options['sql'] ?? ($projectRoot . DIRECTORY_SEPARATOR . 'docs' . DIRECTORY_SEPARATOR . 'sql' . DIRECTORY_SEPARATOR . 'rmutp_database.sql'));
+
+if (isset($options['host'])) {
+    putenv('DB_HOST=' . (string)$options['host']);
+}
+if (isset($options['port'])) {
+    putenv('DB_PORT=' . (string)$options['port']);
+}
+if (isset($options['user'])) {
+    putenv('DB_USER=' . (string)$options['user']);
+}
+if (array_key_exists('password', $options)) {
+    putenv('DB_PASS=' . (string)$options['password']);
+}
+if (isset($options['database'])) {
+    putenv('DB_NAME=' . (string)$options['database']);
+}
+
+$cfg = tenantBaseConfig();
+
+$createDatabaseIfNotExists = static function (string $dbName) use ($cfg): void {
+    $serverPdo = tenantCreatePdo(null);
+    $serverPdo->exec(
+        'CREATE DATABASE IF NOT EXISTS ' . tenantQuoteIdentifier($dbName) . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+};
+
+$applySqlToDatabase = static function (string $dbName, string $sqlPath) use ($createDatabaseIfNotExists): int {
+    $createDatabaseIfNotExists($dbName);
+    $pdo = tenantCreatePdo($dbName);
+    return applySqlFileToConnection($pdo, $sqlPath);
+};
 
 try {
-    $serverDsn = sprintf('mysql:host=%s;port=%d;charset=utf8mb4', $host, $port);
-    $serverPdo = new PDO($serverDsn, $username, (string)$password, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
+    if ($mode === 'core') {
+        tenantEnsureCoreDatabaseExists();
+        $applied = $applySqlToDatabase($cfg['core_db'], $coreSqlPath);
+        echo '[core] Database ready: ' . $cfg['core_db'] . PHP_EOL;
+        echo '[core] Applied statements: ' . $applied . PHP_EOL;
+        echo 'Core database setup completed successfully.' . PHP_EOL;
+        exit(0);
+    }
 
-    $serverPdo->exec(
-        'CREATE DATABASE IF NOT EXISTS ' . quoteIdentifier($database) . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
-    );
+    if ($mode === 'tenant') {
+        $facultyCode = tenantNormalizeCode((string)($options['faculty'] ?? ''));
+        if ($facultyCode === '') {
+            throw new InvalidArgumentException('Missing required option: --faculty=<code>');
+        }
 
-    $dbDsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $database);
-    $pdo = new PDO($dbDsn, $username, (string)$password, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
+        tenantEnsureCoreDatabaseExists();
+        $coreApplied = $applySqlToDatabase($cfg['core_db'], $coreSqlPath);
+        $corePdo = tenantCreatePdo($cfg['core_db']);
+        tenantEnsureCoreTables($corePdo);
 
-    echo '[1/2] Database ready: ' . $database . PHP_EOL;
-    $appliedCount = applySqlFile($pdo, $sqlPath, 'sql');
-    echo '[2/2] SQL applied statements: ' . $appliedCount . PHP_EOL;
+        $tenantDbNameRaw = trim((string)($options['tenant-db'] ?? ''));
+        if ($tenantDbNameRaw === '') {
+            $tenantDbNameRaw = trim((string)($options['database'] ?? ''));
+        }
+        if ($tenantDbNameRaw === '') {
+            $tenantDbNameRaw = 'rmutp_' . $facultyCode;
+        }
 
+        $facultyName = trim((string)($options['faculty-name'] ?? ''));
+        if ($facultyName === '') {
+            $facultyName = strtoupper($facultyCode);
+        }
+
+        $facultyId = tenantUpsertFacultyRecord($corePdo, $facultyCode, $facultyName, $tenantDbNameRaw);
+        $tenantApplied = $applySqlToDatabase($tenantDbNameRaw, $tenantSqlPath);
+
+        echo '[tenant] Core database: ' . $cfg['core_db'] . PHP_EOL;
+        echo '[tenant] Core statements applied: ' . $coreApplied . PHP_EOL;
+        echo '[tenant] Faculty upserted: #' . $facultyId . ' (' . $facultyCode . ')' . PHP_EOL;
+        echo '[tenant] Tenant database ready: ' . $tenantDbNameRaw . PHP_EOL;
+        echo '[tenant] Tenant statements applied: ' . $tenantApplied . PHP_EOL;
+        echo 'Tenant provisioning completed successfully.' . PHP_EOL;
+        exit(0);
+    }
+
+    if ($mode === 'upgrade-all-tenants') {
+        tenantEnsureCoreDatabaseExists();
+        $coreApplied = $applySqlToDatabase($cfg['core_db'], $coreSqlPath);
+        $corePdo = tenantCreatePdo($cfg['core_db']);
+        tenantEnsureCoreTables($corePdo);
+        $faculties = tenantFetchActiveFaculties($corePdo);
+
+        echo '[upgrade-all-tenants] Core database: ' . $cfg['core_db'] . PHP_EOL;
+        echo '[upgrade-all-tenants] Core statements applied: ' . $coreApplied . PHP_EOL;
+
+        $upgraded = 0;
+        foreach ($faculties as $faculty) {
+            $code = (string)($faculty['code'] ?? '');
+            $dbName = (string)($faculty['tenant_db_name'] ?? '');
+            if ($code === '' || $dbName === '') {
+                continue;
+            }
+
+            $applied = $applySqlToDatabase($dbName, $tenantSqlPath);
+            $upgraded++;
+            echo '  - [' . $code . '] ' . $dbName . ': ' . $applied . ' statements' . PHP_EOL;
+        }
+
+        echo '[upgrade-all-tenants] Upgraded tenants: ' . $upgraded . PHP_EOL;
+        echo 'Tenant upgrade completed successfully.' . PHP_EOL;
+        exit(0);
+    }
+
+    if (!in_array($mode, ['single', 'legacy'], true)) {
+        throw new InvalidArgumentException('Unsupported mode: ' . $mode);
+    }
+
+    $targetDb = (string)($options['database'] ?? $cfg['default_db']);
+    $applied = $applySqlToDatabase($targetDb, $tenantSqlPath);
+    echo '[single] Database ready: ' . $targetDb . PHP_EOL;
+    echo '[single] SQL applied statements: ' . $applied . PHP_EOL;
     echo 'Database setup completed successfully.' . PHP_EOL;
     exit(0);
 } catch (Throwable $e) {
     fwrite(STDERR, 'Database setup failed: ' . $e->getMessage() . PHP_EOL);
     exit(1);
 }
+

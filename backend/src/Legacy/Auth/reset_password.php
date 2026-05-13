@@ -42,9 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && $valid_token) {
 <html lang="th">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ตั้งรหัสผ่านใหม่</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="assets/js/rmutp-ui.js"></script>
     <style> body { font-family: 'Sarabun', sans-serif; } </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
